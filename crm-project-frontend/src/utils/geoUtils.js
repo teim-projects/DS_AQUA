@@ -11,7 +11,8 @@ export async function reverseGeocodeLocation(lat, lng) {
   const numLng = Number(lng);
   if (isNaN(numLat) || isNaN(numLng)) return "";
 
-  const cacheKey = `geo_${numLat.toFixed(4)}_${numLng.toFixed(4)}`;
+  // Versioned cache key so broad names (e.g. "Chandrapur, Maharashtra") are refreshed to precise place names ("Rajura")
+  const cacheKey = `geo_precise_${numLat.toFixed(4)}_${numLng.toFixed(4)}`;
 
   // 1. Check memory cache
   if (memoryGeoCache.has(cacheKey)) {
@@ -27,7 +28,7 @@ export async function reverseGeocodeLocation(lat, lng) {
     }
   } catch (_) {}
 
-  // 3. Try OpenStreetMap Nominatim First (Extremely detailed for Indian suburbs/localities like Warje, Kothrud, etc.)
+  // 3. Try OpenStreetMap Nominatim First (Extracts exact landmark, street, colony, suburb or town without broad district/state)
   try {
     const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${numLat}&lon=${numLng}&zoom=18&addressdetails=1`;
     const res = await fetch(osmUrl, {
@@ -37,15 +38,28 @@ export async function reverseGeocodeLocation(lat, lng) {
       const data = await res.json();
       if (data && data.address) {
         const a = data.address;
-        const micro = a.suburb || a.neighbourhood || a.residential || a.subdivision || a.quarter || a.commercial || a.road || a.amenity;
-        const rawCity = a.city || a.state_district || a.town || a.village || a.county || a.district;
-        const cleanCity = rawCity ? rawCity.replace(/\s+(District|City Subdistrict)$/i, "").trim() : "";
-        const state = a.state;
+        const landmark = a.amenity || a.shop || a.building || a.office;
+        const street = a.road || a.pedestrian || a.street;
+        const colonyOrSuburb = a.suburb || a.neighbourhood || a.residential || a.subdivision || a.quarter || a.hamlet;
+        const townOrVillage = a.town || a.village || a.city_district;
+        const city = a.city || a.municipality;
 
-        const parts = [micro, cleanCity && cleanCity !== micro ? cleanCity : null, state].filter(Boolean);
+        let parts = [];
+        if (landmark) parts.push(landmark);
+        if (street && !parts.includes(street)) parts.push(street);
+        if (colonyOrSuburb && !parts.includes(colonyOrSuburb)) parts.push(colonyOrSuburb);
+
+        // If no micro-locality found yet, use town or village
+        if (parts.length === 0 && townOrVillage) parts.push(townOrVillage);
+        // If still nothing, use city
+        if (parts.length === 0 && city) parts.push(city);
+        // Fallbacks only if nothing else exists
+        if (parts.length === 0 && a.county) parts.push(a.county);
+        if (parts.length === 0 && a.state_district) parts.push(a.state_district.replace(/\s+District$/i, ""));
+
         const locName = parts.length > 0
           ? parts.join(", ")
-          : (data.display_name?.split(",").slice(0, 3).join(",") || "");
+          : (data.display_name?.split(",").slice(0, 2).join(",") || "");
 
         if (locName) {
           memoryGeoCache.set(cacheKey, locName);
@@ -65,17 +79,11 @@ export async function reverseGeocodeLocation(lat, lng) {
     if (res.ok) {
       const data = await res.json();
       if (data) {
-        const parts = [
-          data.locality || data.neighbourhood || data.subLocality || data.quarter,
-          data.city || data.town || data.district,
-          data.principalSubdivision,
-        ].filter(Boolean);
-
-        if (parts.length > 0) {
-          const locName = parts.join(", ");
-          memoryGeoCache.set(cacheKey, locName);
-          try { localStorage.setItem(cacheKey, locName); } catch (_) {}
-          return locName;
+        const preciseBdc = data.locality || data.neighbourhood || data.subLocality || data.quarter || data.city;
+        if (preciseBdc) {
+          memoryGeoCache.set(cacheKey, preciseBdc);
+          try { localStorage.setItem(cacheKey, preciseBdc); } catch (_) {}
+          return preciseBdc;
         }
       }
     }
