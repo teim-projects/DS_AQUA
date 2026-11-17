@@ -1,15 +1,18 @@
+import logging
+import re
+from decimal import Decimal
+from django.db.models import Sum, Count, Q
+from django.http import HttpResponse, Http404
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Q
-from django.http import HttpResponse
-from decimal import Decimal
-import re
 
 from .models import Invoice, InvoiceItem
 from .serializers import InvoiceSerializer, InvoiceItemSerializer
 from .utils.pdf_generator import generate_invoice_pdf, render_invoice_html
+
+logger = logging.getLogger(__name__)
 
 
 class InvoiceViewSet(viewsets.ModelViewSet):
@@ -119,13 +122,24 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='pdf')
     def pdf(self, request, pk=None):
-        """Generate and stream Tax Invoice PDF (or HTML if format=html)"""
-        invoice = self.get_object()
+        """Generate and stream Tax Invoice PDF (or HTML if format=html or fallback)"""
+        try:
+            invoice = self.get_object()
+        except Http404:
+            return HttpResponse("Invoice not found", status=404)
+        except Exception as e:
+            logger.exception(f"Error fetching invoice {pk}: {e}")
+            return HttpResponse(f"Error retrieving invoice: {e}", status=500)
+
         format_param = request.query_params.get('format', '').lower()
 
         if format_param == 'html':
-            html_content = render_invoice_html(invoice)
-            return HttpResponse(html_content, content_type='text/html')
+            try:
+                html_content = render_invoice_html(invoice)
+                return HttpResponse(html_content, content_type='text/html')
+            except Exception as e:
+                logger.exception(f"Error rendering HTML invoice {pk}: {e}")
+                return HttpResponse(f"Error rendering HTML invoice: {e}", status=500)
 
         try:
             pdf_bytes = generate_invoice_pdf(invoice)
@@ -135,13 +149,28 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
             return response
         except Exception as e:
-            # Fallback to HTML view if WeasyPrint encounters any system issue
-            html_content = render_invoice_html(invoice)
-            return HttpResponse(html_content, content_type='text/html')
+            logger.warning(f"WeasyPrint PDF generation failed ({e}), falling back to HTML invoice view")
+            try:
+                html_content = render_invoice_html(invoice)
+                return HttpResponse(html_content, content_type='text/html')
+            except Exception as html_err:
+                logger.exception(f"Error rendering fallback HTML invoice {pk}: {html_err}")
+                return HttpResponse(f"Error generating invoice view: {html_err}", status=500)
 
     @action(detail=True, methods=['get'], url_path='html')
     def html(self, request, pk=None):
         """Render standalone HTML invoice page"""
-        invoice = self.get_object()
-        html_content = render_invoice_html(invoice)
-        return HttpResponse(html_content, content_type='text/html')
+        try:
+            invoice = self.get_object()
+        except Http404:
+            return HttpResponse("Invoice not found", status=404)
+        except Exception as e:
+            logger.exception(f"Error fetching invoice {pk}: {e}")
+            return HttpResponse(f"Error retrieving invoice: {e}", status=500)
+
+        try:
+            html_content = render_invoice_html(invoice)
+            return HttpResponse(html_content, content_type='text/html')
+        except Exception as e:
+            logger.exception(f"Error rendering HTML invoice {pk}: {e}")
+            return HttpResponse(f"Error rendering HTML invoice: {e}", status=500)

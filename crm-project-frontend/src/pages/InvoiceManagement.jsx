@@ -142,7 +142,14 @@ export default function InvoiceManagement() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to load document (HTTP ${response.status})`);
+        let errMsg = `Server returned HTTP ${response.status}`;
+        try {
+          const errText = await response.text();
+          if (errText) {
+            errMsg = `${errMsg}: ${errText.slice(0, 150)}`;
+          }
+        } catch (_) {}
+        throw new Error(errMsg);
       }
 
       const contentType = response.headers.get("content-type") || "";
@@ -164,7 +171,11 @@ export default function InvoiceManagement() {
       }
     } catch (err) {
       console.error(err);
-      Swal.fire({ icon: "error", title: "Error", text: "Failed to open invoice document" });
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err.message || "Failed to open invoice document"
+      });
     }
   };
 
@@ -200,7 +211,14 @@ export default function InvoiceManagement() {
         }
       });
 
-      if (!response.ok) throw new Error("Failed to download PDF");
+      if (!response.ok) {
+        let errMsg = `Server returned HTTP ${response.status}`;
+        try {
+          const errText = await response.text();
+          if (errText) errMsg = `${errMsg}: ${errText.slice(0, 150)}`;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
 
       const blob = await response.blob();
       const file = new Blob([blob], { type: "application/pdf" });
@@ -215,7 +233,11 @@ export default function InvoiceManagement() {
       Swal.close();
     } catch (err) {
       console.error(err);
-      Swal.fire({ icon: "error", title: "Error", text: "Failed to download PDF" });
+      Swal.fire({
+        icon: "error",
+        title: "Download Failed",
+        text: err.message || "Failed to download PDF"
+      });
     }
   };
 
