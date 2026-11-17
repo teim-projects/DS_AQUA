@@ -31,7 +31,14 @@ SECRET_KEY = os.getenv("SECRET_KEY","unsafe-dev-key")
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # Add allowed hosts
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv(
+        "ALLOWED_HOSTS",
+        "localhost,127.0.0.1,norafashion.tech,www.norafashion.tech,91.99.119.240"
+    ).split(",")
+    if host.strip()
+]
 
 # Application definition
 
@@ -99,7 +106,18 @@ CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "")
 if CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS.split(",")]
 else:
-    CORS_ALLOWED_ORIGINS = []
+    CORS_ALLOWED_ORIGINS = [
+        "https://norafashion.tech",
+        "https://www.norafashion.tech",
+        "http://norafashion.tech",
+        "http://www.norafashion.tech",
+        "http://91.99.119.240",
+        "https://91.99.119.240",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
 
 CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "")
 
@@ -109,7 +127,18 @@ if CSRF_TRUSTED_ORIGINS:
         for origin in CSRF_TRUSTED_ORIGINS.split(",")
     ]
 else:
-    CSRF_TRUSTED_ORIGINS = []
+    CSRF_TRUSTED_ORIGINS = [
+        "https://norafashion.tech",
+        "https://www.norafashion.tech",
+        "http://norafashion.tech",
+        "http://www.norafashion.tech",
+        "http://91.99.119.240",
+        "https://91.99.119.240",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
 
 TEMPLATES = [
     {
