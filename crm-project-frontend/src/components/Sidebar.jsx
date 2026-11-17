@@ -167,11 +167,11 @@ const allSidebarItems = [
 
   // OPERATIONS (Post-Sales Delivery & Service)
   { key: "contacts", label: "Customers", icon: UserIcon, path: "/customer", section: "OPERATIONS" },
-  { key: "inventory", label: "Inventory", icon: InventoryIcon, path: "/inventory", section: "OPERATIONS" },
   { key: "projects", label: "Project Management", icon: ProjectIcon, path: "/projects", section: "OPERATIONS" },
   { key: "amc", label: "AMC Contracts", icon: AmcIcon, path: "/amc", section: "OPERATIONS" },
   { key: "amc_services", label: "Services", icon: ServiceIcon, path: "/amc-services", section: "OPERATIONS" },
   { key: "invoices", label: "Invoice / Billing", icon: InvoiceIcon, path: "/invoices", section: "OPERATIONS" },
+  { key: "inventory", label: "Inventory", icon: InventoryIcon, path: "/inventory", section: "OPERATIONS" },
 
   // WORK LIST (Technician Field Operations - Single Unified Work Desk & Route Map)
   { key: "work_desk", label: "Work Desk", icon: WorkDeskIcon, path: "/technician/work-desk", section: "WORK LIST" },

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import Base from "../../components/Base";
 import TableView from "../../components/TableView";
 import AdvancedTableFilter from "../../components/AdvancedTableFilter";
@@ -271,10 +272,25 @@ export default function WorkDesk() {
 
   // Start Journey via Google Maps navigation & log GPS milestone
   const handleNavigate = async (row) => {
-    // 1. Capture departure GPS while app tab is active in foreground
+    Swal.fire({
+      title: "Starting Journey...",
+      html: `
+        <div style="font-size: 13px; color: #475569; padding: 6px 0;">
+          Acquiring departure GPS coordinates.<br/>
+          <span style="font-weight: 600; color: #0284c7;">Please tap 'Allow' if prompted by your browser.</span>
+        </div>
+      `,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
     let coords = null;
     try {
-      coords = await getCurrentCoordinates();
+      coords = await getCurrentCoordinates().catch(() => null);
       await fetch(`${BASE_API}/technician/services/${row.id}/start-journey/`, {
         method: "POST",
         headers: {
@@ -292,9 +308,11 @@ export default function WorkDesk() {
       fetchDataAndStats();
     } catch (e) {
       console.warn("Could not log journey start:", e);
+    } finally {
+      Swal.close();
     }
 
-    // 2. Launch Google Maps turn-by-turn navigation
+    // Launch Google Maps navigation in a separate app/tab (keeping CRM website active)
     navigateToLocation({
       latitude: row.latitude,
       longitude: row.longitude,

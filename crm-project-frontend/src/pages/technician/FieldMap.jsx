@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import Base from "../../components/Base";
 import {
   MdFilterList,
@@ -31,6 +32,8 @@ import StartVisitModal from "../../components/technician/StartVisitModal";
 import CompleteVisitModal from "../../components/technician/CompleteVisitModal";
 import AddActivityModal from "../../components/technician/AddActivityModal";
 import ServiceDetailView from "../../components/amc/ServiceDetailView";
+import GeoLocationBadge from "../../components/common/GeoLocationBadge";
+import { geocodePincodeOrAddress } from "../../utils/geoUtils";
 
 export default function FieldMap() {
   const navigate = useNavigate();
@@ -94,10 +97,12 @@ export default function FieldMap() {
   const mapInstanceRef = useRef(null);
   const markersGroupRef = useRef(null);
   const techMarkersGroupRef = useRef(null);
+  const connectionLinesGroupRef = useRef(null);
   const polylineRef = useRef(null);
   const userMarkerRef = useRef(null);
   const [leafletReady, setLeafletReady] = useState(false);
   const [locatingUser, setLocatingUser] = useState(false);
+  const [geocodedPins, setGeocodedPins] = useState({});
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -205,17 +210,25 @@ export default function FieldMap() {
 
   // Start Journey via Google Maps navigation & log GPS milestone
   const handleNavigate = async (site) => {
-    // 1. Launch Google Maps navigation
-    navigateToLocation({
-      latitude: site.latitude,
-      longitude: site.longitude,
-      address: site.address,
-      destinationName: site.customer_name,
+    Swal.fire({
+      title: "Starting Journey...",
+      html: `
+        <div style="font-size: 13px; color: #475569; padding: 6px 0;">
+          Acquiring departure GPS coordinates.<br/>
+          <span style="font-weight: 600; color: #0284c7;">Please tap 'Allow' if prompted by your browser.</span>
+        </div>
+      `,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
     });
 
-    // 2. Concurrently capture departure GPS and log milestone to backend
+    let coords = null;
     try {
-      const coords = await getCurrentCoordinates();
+      coords = await getCurrentCoordinates().catch(() => null);
       const token = localStorage.getItem("access") || localStorage.getItem("token") || "";
       await fetch(`${baseApi}/technician/services/${site.id}/start-journey/`, {
         method: "POST",
@@ -234,15 +247,82 @@ export default function FieldMap() {
       fetchFieldMapData(true);
     } catch (e) {
       console.warn("Could not log journey start:", e);
+    } finally {
+      Swal.close();
     }
+
+    // Launch Google Maps navigation in a separate app/tab (keeping CRM website active)
+    navigateToLocation({
+      latitude: site.latitude,
+      longitude: site.longitude,
+      address: site.address,
+      destinationName: site.customer_name,
+    });
   };
+
+  // Auto-resolve missing coordinates using Indian pincode or address geocoding fallback
+  useEffect(() => {
+    const rawSites = mapData.sites || [];
+    const missing = rawSites.filter(
+      (s) => (!s.has_coordinates || s.latitude === null || s.longitude === null) && !geocodedPins[s.id]
+    );
+
+    if (missing.length === 0) return;
+
+    let isSubscribed = true;
+    const resolveMissingPins = async () => {
+      const resolvedMap = {};
+      for (const site of missing) {
+        try {
+          const geo = await geocodePincodeOrAddress(site.address, site.pin_code, site.city);
+          if (geo && geo.lat && geo.lng) {
+            resolvedMap[site.id] = {
+              latitude: geo.lat,
+              longitude: geo.lng,
+              source: geo.source,
+            };
+          }
+        } catch (e) {
+          console.debug("Geocode error for site:", site.id, e);
+        }
+      }
+
+      if (isSubscribed && Object.keys(resolvedMap).length > 0) {
+        setGeocodedPins((prev) => ({ ...prev, ...resolvedMap }));
+      }
+    };
+
+    resolveMissingPins();
+    return () => {
+      isSubscribed = false;
+    };
+  }, [mapData.sites, geocodedPins]);
+
+  // Enriched sites incorporating fallback geocoded pins
+  const enrichedSites = useMemo(() => {
+    const list = mapData.sites || [];
+    return list.map((s) => {
+      const geo = geocodedPins[s.id];
+      if ((!s.has_coordinates || s.latitude === null || s.longitude === null) && geo) {
+        return {
+          ...s,
+          latitude: geo.latitude,
+          longitude: geo.longitude,
+          has_coordinates: true,
+          is_approximate: true,
+          approximate_source: geo.source,
+        };
+      }
+      return s;
+    });
+  }, [mapData.sites, geocodedPins]);
 
   // Filtered Sites list
   const filteredSites = useMemo(() => {
-    let list = mapData.sites || [];
+    let list = enrichedSites;
 
     if (selectedStatus === "missing_pin") {
-      list = list.filter((s) => !s.has_coordinates);
+      list = list.filter((s) => !s.has_coordinates || s.is_approximate);
     } else if (selectedStatus !== "all") {
       list = list.filter((s) => s.status === selectedStatus);
     }
@@ -268,7 +348,7 @@ export default function FieldMap() {
     }
 
     return list;
-  }, [mapData.sites, selectedStatus, searchQuery]);
+  }, [enrichedSites, selectedStatus, searchQuery]);
 
   // Pinned Sites (have valid latitude & longitude)
   const pinnedSites = useMemo(() => {
@@ -304,6 +384,7 @@ export default function FieldMap() {
       L.control.zoom({ position: "bottomright" }).addTo(map);
 
       markersGroupRef.current = L.featureGroup().addTo(map);
+      connectionLinesGroupRef.current = L.featureGroup().addTo(map);
       techMarkersGroupRef.current = L.featureGroup().addTo(map);
       mapInstanceRef.current = map;
     }
@@ -355,6 +436,10 @@ export default function FieldMap() {
         statusLabel = "Completed";
       }
 
+      if (site.is_approximate && site.status !== "completed") {
+        pinIconSymbol = "📍";
+      }
+
       const pulseHtml =
         site.status === "in_progress"
           ? `<span class="absolute -inset-1 rounded-full bg-amber-400 opacity-75 animate-ping"></span>`
@@ -397,6 +482,12 @@ export default function FieldMap() {
             <span class="font-mono text-xs font-bold text-sky-700">${site.service_number}</span>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${statusBadgeClass}">${statusLabel}</span>
           </div>
+          ${site.is_approximate ? `
+            <div class="mb-2 px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] rounded font-semibold flex items-center gap-1">
+              <span>📍</span>
+              <span>Approximate Pin (${site.approximate_source || "Pincode"})</span>
+            </div>
+          ` : ""}
           <h4 class="font-bold text-slate-900 text-sm leading-snug mb-1">${site.customer_name}</h4>
           ${site.contact_person ? `<p class="text-xs text-slate-600 mb-1 flex items-center gap-1">👤 <span>${site.contact_person}</span> ${site.contact_phone ? `<span class="text-slate-400">(${site.contact_phone})</span>` : ""}</p>` : ""}
           <p class="text-xs text-slate-600 line-clamp-2 mb-2">📍 ${site.address || "Address not specified"}</p>
@@ -454,18 +545,23 @@ export default function FieldMap() {
     }
   }, [leafletReady, pinnedSites, showRoute, selectedSiteId]);
 
-  // Render Live Technicians Markers on Leaflet map
+  // Render Live Technicians Markers and Connection Lines on Leaflet map
   useEffect(() => {
     if (!leafletReady || !mapInstanceRef.current || !techMarkersGroupRef.current) return;
     const L = window.L;
     const techGroup = techMarkersGroupRef.current;
+    const connGroup = connectionLinesGroupRef.current;
+
     techGroup.clearLayers();
+    if (connGroup) {
+      connGroup.clearLayers();
+    }
 
     let liveTechs = mapData.live_technicians || [];
     if (isTechnician) {
       const currentUserId = userInfo?.id || userInfo?.user_id;
       liveTechs = liveTechs.filter((tech) => {
-        if (currentUserId && (tech.technician_id === currentUserId || tech.technician?.id === currentUserId)) {
+        if (currentUserId && (tech.technician === currentUserId || tech.technician_id === currentUserId || tech.technician?.id === currentUserId)) {
           return true;
         }
         const myName = (userInfo?.name || `${userInfo?.first_name || ""} ${userInfo?.last_name || ""}`).trim().toLowerCase();
@@ -539,7 +635,56 @@ export default function FieldMap() {
       const marker = L.marker([lat, lng], { icon: customIcon }).bindPopup(popupHtml);
       techGroup.addLayer(marker);
     });
-  }, [leafletReady, mapData.live_technicians, isTechnician, userInfo]);
+
+    // Draw connection lines from active technician to their incomplete assigned services
+    if (connGroup) {
+      pinnedSites.forEach((site) => {
+        if (site.status === "completed" || site.status === "cancelled") return;
+
+        const siteLat = Number(site.latitude);
+        const siteLng = Number(site.longitude);
+        if (isNaN(siteLat) || isNaN(siteLng)) return;
+
+        const assignedIds = [
+          ...(site.technicians || []).map((t) => t.id),
+          site.service_engineer?.id,
+        ].filter(Boolean);
+
+        const assignedTech = liveTechs.find((t) => {
+          const techId = t.technician || t.technician_id || t.technician?.id;
+          return assignedIds.includes(techId);
+        });
+
+        if (assignedTech && assignedTech.latitude && assignedTech.longitude) {
+          const tLat = Number(assignedTech.latitude);
+          const tLng = Number(assignedTech.longitude);
+          if (isNaN(tLat) || isNaN(tLng)) return;
+
+          const isSiteInProgress = site.status === "in_progress";
+          const lineColor = isSiteInProgress ? "#d97706" : "#0284c7";
+
+          const line = L.polyline([[tLat, tLng], [siteLat, siteLng]], {
+            color: lineColor,
+            weight: 3,
+            opacity: 0.85,
+            dashArray: "6, 8",
+            lineCap: "round",
+          });
+
+          line.bindTooltip(
+            `<div class="p-1 font-sans text-xs">
+              <div class="font-bold text-slate-900">🛵 ${assignedTech.technician_name}</div>
+              <div class="text-sky-700 font-semibold">${site.service_number} - ${site.customer_name}</div>
+              <div class="text-[10px] text-slate-500">Status: ${site.status_display || site.status}</div>
+            </div>`,
+            { sticky: true }
+          );
+
+          connGroup.addLayer(line);
+        }
+      });
+    }
+  }, [leafletReady, mapData.live_technicians, pinnedSites, isTechnician, userInfo]);
 
   // Focus site on map
   const handleFocusSiteOnMap = (site) => {
@@ -1085,7 +1230,21 @@ export default function FieldMap() {
 
                       {/* GPS status chip & Card Action Buttons */}
                       <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                        {site.has_coordinates ? (
+                        {site.is_approximate ? (
+                          <div className="flex items-center gap-1 text-amber-800 text-[11px] font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            <MdLocationOn className="text-xs text-amber-600" />
+                            <span>Approx ({site.approximate_source})</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSiteToPin(site);
+                              }}
+                              className="ml-1 text-sky-700 hover:text-sky-800 underline font-bold cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        ) : site.has_coordinates ? (
                           <div className="flex items-center gap-1 text-emerald-700 text-[11px] font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                             <MdLocationOn className="text-xs text-emerald-600" />
                             <span>GPS Pinned ({Number(site.latitude).toFixed(3)}, {Number(site.longitude).toFixed(3)})</span>
@@ -1171,15 +1330,14 @@ export default function FieldMap() {
                             {formatMilestoneTime(site.milestones?.journey_started_at) || "--:--"}
                           </div>
                           {site.milestones?.journey_lat ? (
-                            <a
-                              href={`https://www.google.com/maps?q=${site.milestones.journey_lat},${site.milestones.journey_lng}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[9px] text-sky-600 hover:underline block truncate mt-0.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              📍 GPS logged
-                            </a>
+                            <div className="mt-1">
+                              <GeoLocationBadge
+                                latitude={site.milestones.journey_lat}
+                                longitude={site.milestones.journey_lng}
+                                compact={true}
+                                showMapsLink={true}
+                              />
+                            </div>
                           ) : (
                             <span className="text-[9px] text-slate-400 block mt-0.5">Pending</span>
                           )}
@@ -1201,15 +1359,14 @@ export default function FieldMap() {
                             {formatMilestoneTime(site.milestones?.visit_started_at) || "--:--"}
                           </div>
                           {site.milestones?.visit_lat ? (
-                            <a
-                              href={`https://www.google.com/maps?q=${site.milestones.visit_lat},${site.milestones.visit_lng}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[9px] text-amber-600 hover:underline block truncate mt-0.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              📍 GPS logged
-                            </a>
+                            <div className="mt-1">
+                              <GeoLocationBadge
+                                latitude={site.milestones.visit_lat}
+                                longitude={site.milestones.visit_lng}
+                                compact={true}
+                                showMapsLink={true}
+                              />
+                            </div>
                           ) : (
                             <span className="text-[9px] text-slate-400 block mt-0.5">Pending</span>
                           )}
@@ -1231,15 +1388,14 @@ export default function FieldMap() {
                             {formatMilestoneTime(site.milestones?.job_completed_at) || "--:--"}
                           </div>
                           {site.milestones?.job_completed_lat ? (
-                            <a
-                              href={`https://www.google.com/maps?q=${site.milestones.job_completed_lat},${site.milestones.job_completed_lng}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[9px] text-emerald-600 hover:underline block truncate mt-0.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              📍 GPS logged
-                            </a>
+                            <div className="mt-1">
+                              <GeoLocationBadge
+                                latitude={site.milestones.job_completed_lat}
+                                longitude={site.milestones.job_completed_lng}
+                                compact={true}
+                                showMapsLink={true}
+                              />
+                            </div>
                           ) : (
                             <span className="text-[9px] text-slate-400 block mt-0.5">Pending</span>
                           )}

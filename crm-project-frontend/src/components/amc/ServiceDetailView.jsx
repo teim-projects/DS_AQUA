@@ -39,6 +39,7 @@ import LocationPickerModal from "../common/LocationPickerModal";
 import UploadAttachmentModal from "../technician/UploadAttachmentModal";
 import CompleteVisitModal from "../technician/CompleteVisitModal";
 import IssueStockModal from "../inventory/IssueStockModal";
+import GeoLocationBadge from "../common/GeoLocationBadge";
 import { navigateToLocation, getGoogleMapsPinUrl, getCurrentCoordinates } from "../../utils/navigation";
 import { isServiceDue, formatDisplayDate } from "../../utils/serviceDateUtils";
 
@@ -597,17 +598,31 @@ export default function ServiceDetailView({
   };
 
   const handleStartJourney = async () => {
-    // 1. Immediately launch Google Maps for live driving navigation
-    navigateToLocation({
-      latitude: currentService.latitude,
-      longitude: currentService.longitude,
-      address: siteAddress || currentService.service_address || currentService.customer_address,
-      destinationName: customerName || equipmentName || "Service Site",
+    // 1. Show waiting indicator for location permission prompt
+    Swal.fire({
+      title: "Starting Journey...",
+      html: `
+        <div style="font-size: 13px; color: #475569; padding: 6px 0;">
+          Acquiring departure GPS coordinates.<br/>
+          <span style="font-weight: 600; color: #0284c7;">Please tap 'Allow' if prompted by your browser.</span>
+        </div>
+      `,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
     });
 
-    // 2. Concurrently capture departure GPS and log milestone to backend
+    // 2. Await user response to browser location prompt (Allow or Deny)
+    let coords = null;
     try {
-      const coords = await getCurrentCoordinates().catch(() => null);
+      coords = await getCurrentCoordinates().catch(() => null);
+    } catch (_) {}
+
+    // 3. Log departure milestone to backend
+    try {
       const isVisit = Boolean(
         currentService.work_type === "amc_visit" ||
         currentService.amc_contract ||
@@ -632,7 +647,17 @@ export default function ServiceDetailView({
       if (onRefresh) onRefresh();
     } catch (err) {
       console.warn("Could not log journey milestone:", err);
+    } finally {
+      Swal.close();
     }
+
+    // 4. Launch Google Maps navigation in a separate app/tab (keeping CRM website active)
+    navigateToLocation({
+      latitude: currentService.latitude,
+      longitude: currentService.longitude,
+      address: siteAddress || currentService.service_address || currentService.customer_address,
+      destinationName: customerName || equipmentName || "Service Site",
+    });
   };
 
   const openWhatsAppModal = () => {
@@ -1496,24 +1521,22 @@ export default function ServiceDetailView({
                         </div>
                       )}
 
-                      <div className="text-[11px] text-slate-600 flex items-start justify-between gap-1 pt-0.5">
-                        <span className="text-slate-400 shrink-0">GPS Coords:</span>
-                        <span className="font-mono text-[10px] text-slate-700 text-right">
-                          {journeyMilestone?.latitude && journeyMilestone?.longitude ? (
-                            <>
-                              <span className="font-semibold text-slate-900 block">
-                                {Number(journeyMilestone.latitude).toFixed(5)}°, {Number(journeyMilestone.longitude).toFixed(5)}°
-                              </span>
-                              {journeyMilestone.accuracy && (
-                                <span className="block text-[9px] text-slate-400">
-                                  (±{Math.round(journeyMilestone.accuracy)}m accuracy)
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-slate-400 italic">No GPS logged</span>
-                          )}
-                        </span>
+                      <div className="pt-2 border-t border-slate-200/60">
+                        {journeyMilestone?.latitude && journeyMilestone?.longitude ? (
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-slate-400 font-medium block">Departure Location:</span>
+                            <GeoLocationBadge
+                              latitude={journeyMilestone.latitude}
+                              longitude={journeyMilestone.longitude}
+                              accuracy={journeyMilestone.accuracy}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-slate-400 italic flex items-center justify-between">
+                            <span>GPS Coords:</span>
+                            <span>No GPS logged</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1571,24 +1594,22 @@ export default function ServiceDetailView({
                         </div>
                       )}
 
-                      <div className="text-[11px] text-slate-600 flex items-start justify-between gap-1 pt-0.5">
-                        <span className="text-slate-400 shrink-0">GPS Coords:</span>
-                        <span className="font-mono text-[10px] text-slate-700 text-right">
-                          {visitMilestone?.latitude && visitMilestone?.longitude ? (
-                            <>
-                              <span className="font-semibold text-slate-900 block">
-                                {Number(visitMilestone.latitude).toFixed(5)}°, {Number(visitMilestone.longitude).toFixed(5)}°
-                              </span>
-                              {visitMilestone.accuracy && (
-                                <span className="block text-[9px] text-slate-400">
-                                  (±{Math.round(visitMilestone.accuracy)}m accuracy)
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-slate-400 italic">No GPS logged</span>
-                          )}
-                        </span>
+                      <div className="pt-2 border-t border-slate-200/60">
+                        {visitMilestone?.latitude && visitMilestone?.longitude ? (
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-slate-400 font-medium block">Check-in Location:</span>
+                            <GeoLocationBadge
+                              latitude={visitMilestone.latitude}
+                              longitude={visitMilestone.longitude}
+                              accuracy={visitMilestone.accuracy}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-slate-400 italic flex items-center justify-between">
+                            <span>GPS Coords:</span>
+                            <span>No GPS logged</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1646,24 +1667,22 @@ export default function ServiceDetailView({
                         </div>
                       )}
 
-                      <div className="text-[11px] text-slate-600 flex items-start justify-between gap-1 pt-0.5">
-                        <span className="text-slate-400 shrink-0">GPS Coords:</span>
-                        <span className="font-mono text-[10px] text-slate-700 text-right">
-                          {completedMilestone?.latitude && completedMilestone?.longitude ? (
-                            <>
-                              <span className="font-semibold text-slate-900 block">
-                                {Number(completedMilestone.latitude).toFixed(5)}°, {Number(completedMilestone.longitude).toFixed(5)}°
-                              </span>
-                              {completedMilestone.accuracy && (
-                                <span className="block text-[9px] text-slate-400">
-                                  (±{Math.round(completedMilestone.accuracy)}m accuracy)
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-slate-400 italic">No GPS logged</span>
-                          )}
-                        </span>
+                      <div className="pt-2 border-t border-slate-200/60">
+                        {completedMilestone?.latitude && completedMilestone?.longitude ? (
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-slate-400 font-medium block">Completion Location:</span>
+                            <GeoLocationBadge
+                              latitude={completedMilestone.latitude}
+                              longitude={completedMilestone.longitude}
+                              accuracy={completedMilestone.accuracy}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-slate-400 italic flex items-center justify-between">
+                            <span>GPS Coords:</span>
+                            <span>No GPS logged</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2166,19 +2185,14 @@ export default function ServiceDetailView({
                       )}
                     </div>
                     {journeyMilestone?.latitude && journeyMilestone?.longitude ? (
-                      <div className="mt-1 flex items-center gap-1.5 text-[10px]">
-                        <span className="text-slate-600 font-mono">
-                          📍 {Number(journeyMilestone.latitude).toFixed(4)}°, {Number(journeyMilestone.longitude).toFixed(4)}°
-                        </span>
-                        <a
-                          href={`https://www.google.com/maps?q=${journeyMilestone.latitude},${journeyMilestone.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sky-600 hover:text-sky-800 font-bold underline inline-flex items-center gap-0.5"
-                        >
-                          <span>Maps</span>
-                          <MdOpenInNew size={10} />
-                        </a>
+                      <div className="mt-1">
+                        <GeoLocationBadge
+                          latitude={journeyMilestone.latitude}
+                          longitude={journeyMilestone.longitude}
+                          accuracy={journeyMilestone.accuracy}
+                          compact={true}
+                          showMapsLink={true}
+                        />
                       </div>
                     ) : (
                       <p className="text-[10px] text-slate-400 mt-0.5">
@@ -2213,19 +2227,14 @@ export default function ServiceDetailView({
                       )}
                     </div>
                     {visitMilestone?.latitude && visitMilestone?.longitude ? (
-                      <div className="mt-1 flex items-center gap-1.5 text-[10px]">
-                        <span className="text-slate-600 font-mono">
-                          📍 {Number(visitMilestone.latitude).toFixed(4)}°, {Number(visitMilestone.longitude).toFixed(4)}°
-                        </span>
-                        <a
-                          href={`https://www.google.com/maps?q=${visitMilestone.latitude},${visitMilestone.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-amber-600 hover:text-amber-800 font-bold underline inline-flex items-center gap-0.5"
-                        >
-                          <span>Maps</span>
-                          <MdOpenInNew size={10} />
-                        </a>
+                      <div className="mt-1">
+                        <GeoLocationBadge
+                          latitude={visitMilestone.latitude}
+                          longitude={visitMilestone.longitude}
+                          accuracy={visitMilestone.accuracy}
+                          compact={true}
+                          showMapsLink={true}
+                        />
                       </div>
                     ) : (
                       <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
@@ -2262,19 +2271,14 @@ export default function ServiceDetailView({
                       )}
                     </div>
                     {completedMilestone?.latitude && completedMilestone?.longitude ? (
-                      <div className="mt-1 flex items-center gap-1.5 text-[10px]">
-                        <span className="text-slate-600 font-mono">
-                          📍 {Number(completedMilestone.latitude).toFixed(4)}°, {Number(completedMilestone.longitude).toFixed(4)}°
-                        </span>
-                        <a
-                          href={`https://www.google.com/maps?q=${completedMilestone.latitude},${completedMilestone.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-600 hover:text-emerald-800 font-bold underline inline-flex items-center gap-0.5"
-                        >
-                          <span>Maps</span>
-                          <MdOpenInNew size={10} />
-                        </a>
+                      <div className="mt-1">
+                        <GeoLocationBadge
+                          latitude={completedMilestone.latitude}
+                          longitude={completedMilestone.longitude}
+                          accuracy={completedMilestone.accuracy}
+                          compact={true}
+                          showMapsLink={true}
+                        />
                       </div>
                     ) : (
                       <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">

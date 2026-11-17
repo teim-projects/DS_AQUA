@@ -22,10 +22,13 @@ export async function getCurrentCoordinates() {
           accuracy: Number(pos.coords.accuracy.toFixed(1)),
         });
       },
-      () => {
+      (err) => {
+        console.warn("Geolocation permission or sensor response:", err?.message || err);
         resolve({ latitude: null, longitude: null, accuracy: null });
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+      // 25 second timeout gives the user plenty of time to tap 'Allow' or 'Don't allow'
+      // maximumAge: 0 forces fresh GPS readings instead of stale coordinates
+      { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
     );
   });
 }
@@ -69,21 +72,24 @@ export function navigateToLocation({
     return;
   }
 
-  // Detect Android to optionally launch native intent, or universal link
-  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-
-  // Synchronous launch to prevent browser pop-up blockers
+  // Create an explicit anchor element with target="_blank"
+  // This directs the mobile OS to launch the native Google Maps app or open in a separate tab,
+  // NEVER navigating away or replacing the current CRM website tab!
   try {
-    const newWindow = window.open(navUrl, "_blank", "noopener,noreferrer");
-    if (!newWindow || newWindow.closed || typeof newWindow.closed === "undefined") {
-      // Fallback if popup was blocked: redirect current tab on mobile
-      if (isAndroid || /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        window.location.href = navUrl;
-      }
-    }
+    const link = document.createElement("a");
+    link.href = navUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try {
+        if (link.parentNode) link.parentNode.removeChild(link);
+      } catch (_) {}
+    }, 500);
   } catch (err) {
-    console.warn("window.open failed, navigating via location.href:", err);
-    window.location.href = navUrl;
+    console.warn("Anchor navigation failed, attempting window.open:", err);
+    window.open(navUrl, "_blank", "noopener,noreferrer");
   }
 }
 

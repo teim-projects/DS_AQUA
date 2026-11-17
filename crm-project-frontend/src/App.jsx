@@ -44,6 +44,7 @@ import BillingDetailsForm from "./components/billing/BillingDetailsForm";
 import InvoiceManagement from "./pages/InvoiceManagement";
 import InvoiceFormView from "./components/invoice/InvoiceFormView";
 import { useUserRole } from "./hooks/useAuth";
+import { useTechnicianLocationTracker } from "./hooks/useTechnicianLocationTracker";
 import { getBaseApiUrl } from "./utils/apiConfig";
 import { getValidAccessToken, isUserLoggedIn } from "./utils/authUtils";
 
@@ -92,6 +93,9 @@ function ModuleProtectedRoute({ module, action = "view", children }) {
 function AppRoutes() {
   const location = useLocation();
   const [, setAuthTick] = useState(0);
+
+  // Background GPS tracker runs automatically when a technician logs in / has tab open
+  useTechnicianLocationTracker();
 
   useEffect(() => {
     const handleAuthChange = () => setAuthTick((t) => t + 1);

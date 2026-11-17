@@ -979,6 +979,8 @@ class TechnicianDailyFieldMapView(APIView):
                 'contact_person': srv.contact_person or getattr(srv.customer, 'contact_person', '') or cust_name,
                 'contact_phone': srv.contact_phone or getattr(srv.customer, 'contact_number', '') or getattr(srv.customer, 'phone', ''),
                 'address': addr or '',
+                'pin_code': getattr(srv.customer, 'pin_code', '') or getattr(srv.customer, 'pincode', '') or '',
+                'city': getattr(srv.customer, 'city', '') or '',
                 'latitude': float(lat) if lat is not None else None,
                 'longitude': float(lng) if lng is not None else None,
                 'has_coordinates': bool(lat is not None and lng is not None),
@@ -1025,6 +1027,8 @@ class TechnicianDailyFieldMapView(APIView):
                 'contact_person': vis.contact_person or getattr(vis.customer, 'contact_person', '') or cust_name,
                 'contact_phone': vis.contact_phone or getattr(vis.customer, 'contact_number', '') or getattr(vis.customer, 'phone', ''),
                 'address': addr or '',
+                'pin_code': getattr(vis.customer, 'pin_code', '') or getattr(vis.customer, 'pincode', '') or '',
+                'city': getattr(vis.customer, 'city', '') or '',
                 'latitude': float(lat) if lat is not None else None,
                 'longitude': float(lng) if lng is not None else None,
                 'has_coordinates': bool(lat is not None and lng is not None),
@@ -1099,6 +1103,29 @@ class TechnicianDailyFieldMapView(APIView):
                 active_tech_ids.add(t.id)
             if v.service_engineer_id:
                 active_tech_ids.add(v.service_engineer_id)
+
+        # Fallback to latest TechnicianActivity GPS if active technician doesn't have live location yet
+        for t_id in active_tech_ids:
+            has_live = TechnicianLiveLocation.objects.filter(technician_id=t_id, latitude__isnull=False, longitude__isnull=False).exists()
+            if not has_live:
+                latest_act = TechnicianActivity.objects.filter(
+                    technician_id=t_id,
+                    latitude__isnull=False,
+                    longitude__isnull=False
+                ).order_by('-created_at').first()
+                if latest_act:
+                    TechnicianLiveLocation.objects.update_or_create(
+                        technician_id=t_id,
+                        defaults={
+                            'latitude': latest_act.latitude,
+                            'longitude': latest_act.longitude,
+                            'accuracy': latest_act.accuracy or 25.0,
+                            'status': 'on_duty' if latest_act.action in ['journey_started', 'visit_started'] else 'idle',
+                            'last_action': latest_act.action,
+                            'current_service_id': latest_act.service_id or latest_act.visit_id,
+                            'current_work_type': 'single_service' if latest_act.service_id else ('amc_visit' if latest_act.visit_id else ''),
+                        }
+                    )
 
         live_techs = TechnicianLiveLocation.objects.select_related('technician').filter(
             technician_id__in=active_tech_ids
