@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   MdAdd,
@@ -6,13 +7,15 @@ import {
   MdEdit,
   MdDelete,
   MdRemoveRedEye,
-  MdDownload
+  MdDownload,
+  MdTransform
 } from "react-icons/md";
 import { Search } from "lucide-react";
 import Swal from "sweetalert2";
 import Base from "../components/Base";
 import TableView from "../components/TableView";
 import AddInvoiceModal from "../components/invoice/AddInvoiceModal";
+import AdvancedTableFilter from "../components/AdvancedTableFilter";
 import { getBaseApiUrl } from "../utils/apiConfig";
 import { exportToExcel, formatExcelDate } from "../utils/excelExport";
 
@@ -31,13 +34,12 @@ export default function InvoiceManagement() {
 
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState(() => searchParams.get("filter") || "all");
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const filterDropdownRef = useRef(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filteredData, setFilteredData] = useState([]);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // KPI Summary
   const [summary, setSummary] = useState({
@@ -88,8 +90,10 @@ export default function InvoiceManagement() {
       const res = await fetch(`${baseApi}/invoice/invoices/?limit=1000`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const list = Array.isArray(data) ? data : data.results || [];
+      const rawList = Array.isArray(data) ? data : data.results || [];
+      const list = rawList.filter((inv) => inv.invoice_type !== "BILL_OF_SUPPLY");
       setInvoices(list);
+      setFilteredData(list);
 
       // Summary KPIs
       const sumRes = await fetch(`${baseApi}/invoice/invoices/summary/`, { headers });
@@ -180,7 +184,7 @@ export default function InvoiceManagement() {
   };
 
   // Download PDF file
-  const handleDownloadPDF = async (invoiceId, invoiceNumber) => {
+  const handleDownloadPDF = async (invoiceId, invoiceNumber, docType = "TAX_INVOICE") => {
     Swal.fire({
       title: "Downloading Invoice PDF...",
       html: `
@@ -224,7 +228,8 @@ export default function InvoiceManagement() {
       const file = new Blob([blob], { type: "application/pdf" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(file);
-      link.download = `Tax_Invoice_${invoiceNumber || invoiceId}.pdf`;
+      const prefix = docType === "PROFORMA" ? "Proforma_Invoice" : "Tax_Invoice";
+      link.download = `${prefix}_${invoiceNumber || invoiceId}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -275,31 +280,59 @@ export default function InvoiceManagement() {
     });
   };
 
-  // Filter options
-  const filterOptions = [
-    { value: "all", label: "All Records" },
-    { value: "project", label: "Project Invoices" },
-    { value: "amc", label: "AMC Invoices" },
-    { value: "service", label: "Service Invoices" },
-    { value: "direct", label: "Direct Invoices" },
-    { value: "paid", label: "Paid Invoices" },
-    { value: "unpaid", label: "Pending / Unpaid" }
-  ];
-
-  const currentFilterLabel = filterOptions.find((o) => o.value === filterType)?.label || "All Records";
+  // Convert Proforma Invoice to Tax Invoice
+  const handleConvertToTaxInvoice = (id, invNum) => {
+    Swal.fire({
+      title: "Convert to Tax Invoice?",
+      text: `Are you sure you want to convert Proforma Invoice #${invNum} to an official GST Tax Invoice?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#0284c7",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Yes, Convert to Tax Invoice",
+      cancelButtonText: "Cancel",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const token =
+            localStorage.getItem("access") ||
+            localStorage.getItem("access_token") ||
+            localStorage.getItem("token") ||
+            localStorage.getItem("authToken") ||
+            "";
+          const res = await fetch(`${baseApi}/invoice/invoices/${id}/convert-to-invoice/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || "Failed to convert proforma invoice");
+          }
+          const data = await res.json();
+          Swal.fire({
+            icon: "success",
+            title: "Converted to Tax Invoice!",
+            text: data.message || `Proforma Invoice #${invNum} has been converted to Tax Invoice successfully.`,
+            timer: 2000,
+            showConfirmButton: false,
+          });
+          fetchInvoices();
+        } catch (err) {
+          Swal.fire("Error", err.message || "Could not convert invoice", "error");
+        }
+      }
+    });
+  };
 
   // Filtered dataset
   const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      if (filterType === "project" && inv.invoice_type !== "PROJECT") return false;
-      if (filterType === "amc" && inv.invoice_type !== "AMC") return false;
-      if (filterType === "service" && inv.invoice_type !== "SERVICE") return false;
-      if (filterType === "direct" && inv.invoice_type !== "DIRECT") return false;
-      if (filterType === "paid" && inv.status !== "PAID") return false;
-      if (filterType === "unpaid" && inv.status !== "UNPAID" && inv.status !== "PARTIAL") return false;
-
-      if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase();
+    let base = filteredData.length > 0 || invoices.length === 0 ? filteredData : invoices;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      return base.filter((inv) => {
         const matchesNum = (inv.invoice_number || "").toLowerCase().includes(q);
         const matchesName = (inv.bill_to_name || "").toLowerCase().includes(q);
         const matchesGstin = (inv.bill_to_gstin || "").toLowerCase().includes(q);
@@ -307,11 +340,10 @@ export default function InvoiceManagement() {
         const matchesJob = (inv.job_code || "").toLowerCase().includes(q);
         const matchesPo = (inv.po_number || "").toLowerCase().includes(q);
         return matchesNum || matchesName || matchesGstin || matchesContact || matchesJob || matchesPo;
-      }
-
-      return true;
-    });
-  }, [invoices, filterType, searchTerm]);
+      });
+    }
+    return base;
+  }, [invoices, filteredData, searchTerm]);
 
   // Pagination
   const totalCount = filteredInvoices.length;
@@ -382,13 +414,24 @@ export default function InvoiceManagement() {
       key: "invoice_number",
       label: "Invoice No",
       render: (r) => (
-        <span
-          className="text-blue-600 font-bold text-xs whitespace-nowrap cursor-pointer hover:underline block"
-          onClick={() => handleViewPDF(r.id)}
-          title="Click to view Tax Invoice PDF"
-        >
-          #{r.invoice_number}
-        </span>
+        <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <span
+            className="text-blue-600 font-bold text-xs cursor-pointer hover:underline"
+            onClick={() => handleViewPDF(r.id)}
+            title={`Click to view ${r.document_type === "PROFORMA" ? "Proforma Invoice" : "Tax Invoice"} PDF`}
+          >
+            #{r.invoice_number}
+          </span>
+          {r.document_type === "PROFORMA" ? (
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+              Proforma
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase tracking-wider bg-sky-50 text-sky-700 border border-sky-200">
+              Tax
+            </span>
+          )}
+        </div>
       ),
       className: "whitespace-nowrap text-center",
     },
@@ -530,42 +573,15 @@ export default function InvoiceManagement() {
               />
             </div>
 
-            {/* Quick Filter Dropdown */}
-            <div className="relative" ref={filterDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className="px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap cursor-pointer"
-              >
-                <MdFilterList className="text-slate-400" />
-                {currentFilterLabel}
-              </button>
-
-              {showFilterDropdown && (
-                <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30 font-sans">
-                  {filterOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setFilterType(option.value);
-                        setShowFilterDropdown(false);
-                        setCurrentPage(1);
-                        const newParams = new URLSearchParams(searchParams);
-                        if (option.value === "all") newParams.delete("filter");
-                        else newParams.set("filter", option.value);
-                        setSearchParams(newParams, { replace: true });
-                      }}
-                      className={`w-full text-left px-4 py-2 text-xs hover:bg-slate-50 transition-colors flex items-center justify-between cursor-pointer ${filterType === option.value ? "bg-blue-50 text-blue-600 font-medium" : "text-slate-700"
-                        }`}
-                    >
-                      <span>{option.label}</span>
-                      {filterType === option.value && <span className="text-blue-600 font-bold">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Filter Button */}
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen(true)}
+              className="px-2.5 sm:px-3.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap cursor-pointer"
+            >
+              <MdFilterList className="text-slate-400" />
+              Filter
+            </button>
 
             {/* Export to Excel */}
             <button
@@ -652,6 +668,18 @@ export default function InvoiceManagement() {
                   <MdRemoveRedEye />
                 </button>
 
+                {/* Convert Proforma to Tax Invoice */}
+                {row.document_type === "PROFORMA" && (
+                  <button
+                    type="button"
+                    onClick={() => handleConvertToTaxInvoice(row.id, row.invoice_number)}
+                    className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 rounded transition-all duration-150 text-sm shadow-xs cursor-pointer"
+                    title="Convert Proforma to Official Tax Invoice"
+                  >
+                    <MdTransform />
+                  </button>
+                )}
+
                 {/* Edit Invoice (Opens Popup Form) */}
                 <button
                   type="button"
@@ -668,7 +696,7 @@ export default function InvoiceManagement() {
                 {/* Download PDF */}
                 <button
                   type="button"
-                  onClick={() => handleDownloadPDF(row.id, row.invoice_number)}
+                  onClick={() => handleDownloadPDF(row.id, row.invoice_number, row.document_type)}
                   className="p-1 bg-slate-100 hover:bg-green-100 text-slate-600 hover:text-green-700 rounded transition-all duration-150 text-sm shadow-xs cursor-pointer"
                   title="Download Invoice PDF"
                 >
@@ -709,9 +737,10 @@ export default function InvoiceManagement() {
           onSuccess={(saved) => {
             fetchInvoices();
             if (saved?.id) {
+              const isProforma = saved.document_type === "PROFORMA";
               Swal.fire({
-                title: "Invoice Generated!",
-                text: `Tax Invoice #${saved.invoice_number || ""} saved. View document now?`,
+                title: isProforma ? "Proforma Generated!" : "Invoice Generated!",
+                text: `${isProforma ? "Proforma Invoice" : "Tax Invoice"} #${saved.invoice_number || ""} saved. View document now?`,
                 icon: "success",
                 showCancelButton: true,
                 confirmButtonColor: "#0284c7",
@@ -727,6 +756,43 @@ export default function InvoiceManagement() {
           }}
         />
       )}
+      {/* FILTER DRAWER - PORTAL TO BODY PREVENTS LAYOUT PUSH AND WHITE BOTTOM STRIP */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <>
+            {isFilterOpen && (
+              <div
+                className="fixed inset-0 w-screen h-screen bg-black/40 z-[9999]"
+                onClick={() => setIsFilterOpen(false)}
+              />
+            )}
+
+            <div
+              className={`fixed top-0 right-0 h-screen w-full max-w-[380px] sm:w-[380px] bg-white shadow-2xl z-[10000] flex flex-col transition-transform duration-300 ease-in-out ${
+                isFilterOpen ? "translate-x-0" : "translate-x-full"
+              }`}
+            >
+              <div className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0">
+                <h3 className="text-lg font-bold text-slate-900">Filters</h3>
+                <button
+                  onClick={() => setIsFilterOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 cursor-pointer"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-5 overflow-y-auto flex-1">
+                <AdvancedTableFilter
+                  data={invoices}
+                  onFilter={setFilteredData}
+                  setItemsPerPage={setItemsPerPage}
+                  columns={columns}
+                />
+              </div>
+            </div>
+          </>,
+          document.body
+        )}
     </Base>
   );
 }

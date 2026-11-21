@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Advance Payment Receipt #{{ receipt.receipt_number }} - {{ company_name|default:"D S AQUA" }}</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 14mm 10mm 10mm 10mm;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            margin: 0;
+            padding: 0;
+            font-size: 10px;
+            line-height: 1.35;
+        }
+
+        .receipt-wrapper {
+            width: 100%;
+            background: #ffffff;
+        }
+
+        /* TOP HEADER: BANNER + RECIPIENT & LOGO */
+        .header-top-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6px;
+        }
+
+        .header-left-col {
+            vertical-align: middle;
+            text-align: left;
+        }
+
+        .header-right-col {
+            vertical-align: middle;
+            text-align: right;
+        }
+
+        .receipt-banner {
+            background-color: #3e77a2;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 13px;
+            text-transform: uppercase;
+            padding: 5px 16px;
+            display: inline-block;
+            letter-spacing: 0.8px;
+            border-radius: 2px;
+        }
+
+        .recipient-tag {
+            font-size: 8.5px;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+
+        .company-logo {
+            max-height: 38px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .company-logo-fallback {
+            font-size: 18px;
+            font-weight: 900;
+            color: #3e77a2;
+            border: 2px solid #3e77a2;
+            padding: 2px 10px;
+            display: inline-block;
+            border-radius: 20px;
+        }
+
+        .company-title-row {
+            font-size: 14px;
+            font-weight: 800;
+            color: #3e77a2;
+            margin-top: 4px;
+            margin-bottom: 3px;
+            letter-spacing: 0.4px;
+        }
+
+        .company-info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+            border-bottom: 1.5px solid #3e77a2;
+            padding-bottom: 6px;
+        }
+
+        .company-info-table td {
+            vertical-align: top;
+            padding: 2px 4px 4px 0;
+            font-size: 9px;
+            color: #334155;
+        }
+
+        .meta-label {
+            font-size: 8.5px;
+            color: #64748b;
+            font-weight: 600;
+            display: block;
+        }
+
+        .meta-val {
+            font-size: 9px;
+            color: #0f172a;
+            font-weight: 600;
+            margin-top: 1px;
+            line-height: 1.3;
+        }
+
+        /* 3-COLUMN METADATA GRID */
+        .meta-box-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+
+        .meta-box-table td {
+            border: 1px solid #94a3b8;
+            vertical-align: top;
+            padding: 6px 8px;
+        }
+
+        .meta-box-table .col-meta {
+            width: 32%;
+        }
+
+        .meta-box-table .col-bill {
+            width: 38%;
+        }
+
+        .meta-box-table .col-ref {
+            width: 30%;
+        }
+
+        .box-title {
+            font-size: 9px;
+            font-weight: 800;
+            color: #3e77a2;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+            padding-bottom: 2px;
+            border-bottom: 1px solid #cbd5e1;
+            letter-spacing: 0.3px;
+        }
+
+        .meta-inner-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .meta-inner-table td {
+            border: none !important;
+            padding: 2px 0;
+            font-size: 9px;
+        }
+
+        .meta-inner-table .lbl {
+            color: #475569;
+            font-weight: 600;
+            width: 48%;
+        }
+
+        .meta-inner-table .val {
+            color: #0f172a;
+            font-weight: 700;
+            text-align: right;
+            width: 52%;
+        }
+
+        .party-name {
+            font-size: 10.5px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+        }
+
+        .party-addr {
+            font-size: 9px;
+            color: #334155;
+            line-height: 1.35;
+            margin-bottom: 3px;
+        }
+
+        .party-meta-row {
+            font-size: 9px;
+            margin-bottom: 1.5px;
+        }
+
+        .party-meta-label {
+            color: #475569;
+            font-weight: 600;
+        }
+
+        .party-meta-value {
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        /* HIGHLIGHT AMOUNT BOX */
+        .amount-highlight-box {
+            background-color: #f0fdf4;
+            border: 1.5px solid #86efac;
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+        }
+
+        .amount-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .amount-table td {
+            vertical-align: middle;
+        }
+
+        .amount-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: #166534;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .amount-number {
+            font-size: 20px;
+            font-weight: 900;
+            color: #15803d;
+            text-align: right;
+        }
+
+        .amount-words {
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        /* FINANCIAL BREAKDOWN TABLE */
+        .breakdown-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #94a3b8;
+            margin-bottom: 12px;
+            font-size: 9.5px;
+        }
+
+        .breakdown-table th {
+            background-color: #3e77a2;
+            color: #ffffff;
+            font-weight: 700;
+            padding: 6px 8px;
+            text-align: left;
+            border: 1px solid #336e97;
+        }
+
+        .breakdown-table td {
+            border: 1px solid #cbd5e1;
+            padding: 6px 8px;
+            color: #0f172a;
+        }
+
+        .breakdown-table .text-right {
+            text-align: right;
+        }
+
+        .breakdown-table .text-center {
+            text-align: center;
+        }
+
+        .breakdown-table tr.highlight-row {
+            background-color: #f8fafc;
+            font-weight: 700;
+        }
+
+        .breakdown-table tr.total-row {
+            background-color: #3e77a2;
+            color: #ffffff;
+            font-weight: 800;
+        }
+
+        .breakdown-table tr.total-row td {
+            color: #ffffff;
+            border-color: #336e97;
+        }
+
+        /* BOTTOM SPLIT SECTION */
+        .bottom-split-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+
+        .bottom-split-table td {
+            vertical-align: top;
+            padding: 0;
+        }
+
+        .left-notes-pane {
+            width: 58%;
+            padding-right: 14px !important;
+        }
+
+        .right-bank-pane {
+            width: 42%;
+            border: 1px solid #94a3b8;
+            border-radius: 3px;
+            padding: 8px !important;
+            background-color: #f8fafc;
+        }
+
+        .section-divider {
+            border-top: 1px solid #cbd5e1;
+            padding-top: 4px;
+            margin-top: 6px;
+            margin-bottom: 4px;
+        }
+
+        .signatory-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 14px;
+        }
+
+        .signatory-table td {
+            width: 50%;
+            vertical-align: top;
+        }
+
+        .sign-img-container {
+            height: 38px;
+            margin: 4px 0;
+        }
+
+        .sign-img {
+            max-height: 38px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .auth-signatory-text {
+            font-weight: 800;
+            font-size: 9.5px;
+            color: #0f172a;
+            border-top: 1px solid #cbd5e1;
+            display: inline-block;
+            padding-top: 3px;
+            min-width: 160px;
+        }
+
+        .seal-sign-text {
+            font-weight: 700;
+            font-size: 9px;
+            color: #475569;
+            border-top: 1px dashed #cbd5e1;
+            display: inline-block;
+            padding-top: 3px;
+            min-width: 160px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="receipt-wrapper">
+        <!-- TOP HEADER: BANNER + RECIPIENT & LOGO -->
+        <table class="header-top-table">
+            <tr>
+                <td class="header-left-col">
+                    <div class="receipt-banner">ADVANCE PAYMENT RECEIPT</div>
+                </td>
+                <td class="header-right-col">
+                    <div class="recipient-tag">ORIGINAL FOR RECIPIENT</div>
+                    {% if logo_base64 %}
+                    <img src="{{ logo_base64 }}" alt="DS AQUA Logo" class="company-logo" />
+                    {% else %}
+                    <div class="company-logo-fallback">DS AQUA</div>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+
+        <!-- COMPANY TITLE -->
+        <div class="company-title-row">
+            {{ company_name }}
+        </div>
+
+        <!-- 3-COLUMN COMPANY DETAILS -->
+        <table class="company-info-table">
+            <tr>
+                <td style="width: 44%;">
+                    <div class="meta-label">Address:</div>
+                    <div class="meta-val">
+                        {{ company_address }}
+                    </div>
+                </td>
+                <td style="width: 28%;">
+                    <div><span class="meta-label">Phone:</span></div>
+                    <div class="meta-val">{{ company_phone }}</div>
+                    <div style="margin-top: 3px;"><span class="meta-label">Email:</span></div>
+                    <div class="meta-val">{{ company_email }}</div>
+                </td>
+                <td style="width: 28%;">
+                    <div><span class="meta-label">GSTIN:</span></div>
+                    <div class="meta-val" style="font-weight: 800;">{{ receipt.company_gstin|default:"27AALCD8065C1ZJ" }}</div>
+                    <div style="margin-top: 3px;"><span class="meta-label">State:</span></div>
+                    <div class="meta-val">{{ company_state }}</div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- 3-COLUMN METADATA GRID -->
+        <table class="meta-box-table">
+            <tr>
+                <!-- Col 1: Receipt Meta -->
+                <td class="col-meta">
+                    <div class="box-title">Receipt Details</div>
+                    <table class="meta-inner-table">
+                        <tr>
+                            <td class="lbl">Receipt No.:</td>
+                            <td class="val font-mono" style="color: #0284c7;">#{{ receipt.receipt_number }}</td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Receipt Date:</td>
+                            <td class="val">{{ receipt.receipt_date|date:"d-m-Y"|default:receipt.receipt_date }}</td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Payment Mode:</td>
+                            <td class="val">{{ payment_mode_display }}</td>
+                        </tr>
+                        {% if receipt.transaction_ref %}
+                        <tr>
+                            <td class="lbl">Ref / UTR No.:</td>
+                            <td class="val font-mono" style="font-size: 8.5px;">{{ receipt.transaction_ref }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if receipt.transaction_date %}
+                        <tr>
+                            <td class="lbl">Txn Date:</td>
+                            <td class="val">{{ receipt.transaction_date|date:"d-m-Y"|default:receipt.transaction_date }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <td class="lbl">Status:</td>
+                            <td class="val" style="color: #16a34a;">{{ receipt.status|default:"CONFIRMED" }}</td>
+                        </tr>
+                    </table>
+                </td>
+
+                <!-- Col 2: Received From (Payer) -->
+                <td class="col-bill">
+                    <div class="box-title">Received From</div>
+                    <div class="party-name">{{ receipt.payer_name|default:"-" }}</div>
+                    <div class="party-addr">{{ receipt.address|default:"-" }}</div>
+                    {% if receipt.contact_person %}
+                    <div class="party-meta-row">
+                        <span class="party-meta-label">Contact Person:</span>
+                        <span class="party-meta-value">{{ receipt.contact_person }}</span>
+                    </div>
+                    {% endif %}
+                    {% if receipt.contact_number %}
+                    <div class="party-meta-row">
+                        <span class="party-meta-label">Contact No.:</span>
+                        <span class="party-meta-value">{{ receipt.contact_number }}</span>
+                    </div>
+                    {% endif %}
+                    {% if receipt.gstin %}
+                    <div class="party-meta-row">
+                        <span class="party-meta-label">GSTIN:</span>
+                        <span class="party-meta-value font-mono">{{ receipt.gstin }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="party-meta-row">
+                        <span class="party-meta-label">State / City:</span>
+                        <span class="party-meta-value">{{ receipt.city }}, {{ receipt.state|default:"Maharashtra" }}</span>
+                    </div>
+                </td>
+
+                <!-- Col 3: Reference (Project / AMC / Service) -->
+                <td class="col-ref">
+                    <div class="box-title">Order / Service Reference</div>
+                    <table class="meta-inner-table">
+                        <tr>
+                            <td class="lbl">Source:</td>
+                            <td class="val">{{ receipt.get_receipt_type_display|default:receipt.receipt_type }}</td>
+                        </tr>
+                        {% if receipt.project %}
+                        <tr>
+                            <td class="lbl">Project Code:</td>
+                            <td class="val font-mono">{{ project_code|default:receipt.project.project_code|default:"-" }}</td>
+                        </tr>
+                        {% elif receipt.amc_contract %}
+                        <tr>
+                            <td class="lbl">AMC Contract:</td>
+                            <td class="val font-mono">{{ amc_contract_number|default:receipt.amc_contract.contract_id|default:"-" }}</td>
+                        </tr>
+                        {% elif receipt.service %}
+                        <tr>
+                            <td class="lbl">Service ID:</td>
+                            <td class="val font-mono">{{ service_number|default:receipt.service.service_id|default:"-" }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                    {% if receipt.purpose %}
+                    <div style="margin-top: 6px; border-top: 1px dashed #cbd5e1; padding-top: 4px;">
+                        <span class="party-meta-label">Against:</span>
+                        <div style="font-size: 8.5px; color: #1e293b; font-weight: 600; margin-top: 1px;">
+                            {{ receipt.purpose }}
+                        </div>
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+
+        <!-- HIGHLIGHT AMOUNT RECEIVED BOX -->
+        <div class="amount-highlight-box">
+            <table class="amount-table">
+                <tr>
+                    <td>
+                        <div class="amount-label">Advance Amount Received</div>
+                        <div class="amount-words">"{{ receipt.amount_in_words }}"</div>
+                    </td>
+                    <td style="text-align: right;">
+                        <div class="amount-number">₹ {{ receipt.amount|floatformat:2 }}</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- FINANCIAL CONTEXT BREAKDOWN -->
+        <table class="breakdown-table">
+            <thead>
+                <tr>
+                    <th style="width: 45%;">Description / Milestone Particulars</th>
+                    <th class="text-right" style="width: 25%;">Total Order Value</th>
+                    <th class="text-right" style="width: 15%;">Advance Paid</th>
+                    <th class="text-right" style="width: 15%;">Balance Remaining</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <strong>{{ receipt.purpose|default:"Advance payment for installation / execution / maintenance contract" }}</strong>
+                        <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">
+                            Ref: {{ receipt.get_receipt_type_display }} • Mode: {{ payment_mode_display }} {% if receipt.transaction_ref %}• Ref No: {{ receipt.transaction_ref }}{% endif %}
+                        </div>
+                    </td>
+                    <td class="text-right">₹ {{ receipt.total_order_amount|floatformat:2 }}</td>
+                    <td class="text-right" style="color: #15803d; font-weight: 700;">₹ {{ receipt.amount|floatformat:2 }}</td>
+                    <td class="text-right" style="color: #b91c1c; font-weight: 700;">₹ {{ receipt.balance_amount|floatformat:2 }}</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td>Total Advance Credited</td>
+                    <td class="text-right">₹ {{ receipt.total_order_amount|floatformat:2 }}</td>
+                    <td class="text-right">₹ {{ receipt.amount|floatformat:2 }}</td>
+                    <td class="text-right">₹ {{ receipt.balance_amount|floatformat:2 }}</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- BOTTOM SPLIT SECTION (NOTES & BANK ACCOUNT) -->
+        <table class="bottom-split-table">
+            <tr>
+                <!-- Left Pane: Notes & Terms -->
+                <td class="left-notes-pane">
+                    {% if receipt.notes %}
+                    <div class="box-title">Notes / Remarks</div>
+                    <div style="font-size: 8.5px; color: #334155; margin-bottom: 6px;">
+                        {{ receipt.notes }}
+                    </div>
+                    {% endif %}
+
+                    <div class="box-title">Terms &amp; Conditions</div>
+                    <div style="font-size: 8px; color: #64748b; line-height: 1.4;">
+                        {{ receipt.terms_conditions|default:"1. Advance payment received is non-refundable upon project/contract commencement.<br>2. Official tax invoice / bill will be issued upon milestone / progress delivery.<br>3. Subject to Pune jurisdiction."|safe }}
+                    </div>
+                </td>
+
+                <!-- Right Pane: Deposited Bank Details -->
+                <td class="right-bank-pane">
+                    <div class="box-title" style="margin-bottom: 5px;">Deposited To (Bank Account)</div>
+                    <table class="meta-inner-table">
+                        <tr>
+                            <td class="lbl">Bank Name:</td>
+                            <td class="val">{{ bank_name }}</td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Account No.:</td>
+                            <td class="val font-mono"><strong>{{ bank_account_no }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">IFSC Code:</td>
+                            <td class="val font-mono"><strong>{{ bank_ifsc }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="lbl">Account Holder:</td>
+                            <td class="val" style="font-size: 8.5px;">{{ account_holder }}</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <!-- SIGNATURES -->
+        <table class="signatory-table">
+            <tr>
+                <td style="text-align: left;">
+                    <div style="height: 38px;"></div>
+                    <div class="seal-sign-text">Payer's Seal &amp; Signature</div>
+                </td>
+                <td style="text-align: right;">
+                    <div style="font-size: 9px; color: #334155; margin-bottom: 2px;">
+                        For: <strong>{{ company_name }}</strong>
+                    </div>
+                    <div class="sign-img-container">
+                        {% if signature_base64 %}
+                        <img src="{{ signature_base64 }}" alt="Authorized Signature" class="sign-img" />
+                        {% else %}
+                        <div style="height: 38px;"></div>
+                        {% endif %}
+                    </div>
+                    <div class="auth-signatory-text">Authorized Signatory</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+
+</html>

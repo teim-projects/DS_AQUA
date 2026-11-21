@@ -179,6 +179,27 @@ class AMCContractSerializer(serializers.ModelSerializer):
     payment_frequency_display = serializers.CharField(source="get_payment_frequency_display", read_only=True)
     service_frequency_display = serializers.CharField(source="get_service_frequency_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    advance_receipts = serializers.SerializerMethodField()
+
+    def get_advance_receipts(self, obj):
+        try:
+            receipts = obj.advance_receipts.all().order_by('-id')
+            return [
+                {
+                    'id': r.id,
+                    'receipt_number': r.receipt_number,
+                    'receipt_date': str(r.receipt_date) if r.receipt_date else None,
+                    'amount': float(r.amount) if r.amount is not None else 0.0,
+                    'payment_mode': r.payment_mode,
+                    'payment_mode_display': r.get_payment_mode_display(),
+                    'transaction_ref': r.transaction_ref,
+                    'status': r.status,
+                    'purpose': r.purpose,
+                }
+                for r in receipts
+            ]
+        except Exception:
+            return []
 
     class Meta:
         model = AMCContract
@@ -300,6 +321,27 @@ class AMCServiceSerializer(serializers.ModelSerializer):
     notes = ServiceVisitNoteSerializer(source='technician_activities', many=True, read_only=True)
     attachments = ServiceAttachmentSerializer(many=True, read_only=True)
     issued_inventory = serializers.SerializerMethodField()
+    advance_receipts = serializers.SerializerMethodField()
+
+    def get_advance_receipts(self, obj):
+        try:
+            receipts = obj.advance_receipts.all().order_by('-id')
+            return [
+                {
+                    'id': r.id,
+                    'receipt_number': r.receipt_number,
+                    'receipt_date': str(r.receipt_date) if r.receipt_date else None,
+                    'amount': float(r.amount) if r.amount is not None else 0.0,
+                    'payment_mode': r.payment_mode,
+                    'payment_mode_display': r.get_payment_mode_display(),
+                    'transaction_ref': r.transaction_ref,
+                    'status': r.status,
+                    'purpose': r.purpose,
+                }
+                for r in receipts
+            ]
+        except Exception:
+            return []
 
     def get_issued_inventory(self, obj):
         try:
@@ -366,6 +408,27 @@ class AMCVisitSerializer(serializers.ModelSerializer):
     notes = ServiceVisitNoteSerializer(source='technician_activities', many=True, read_only=True)
     attachments = ServiceAttachmentSerializer(many=True, read_only=True)
     issued_inventory = serializers.SerializerMethodField()
+    advance_receipts = serializers.SerializerMethodField()
+
+    def get_advance_receipts(self, obj):
+        try:
+            receipts = obj.advance_receipts.all().order_by('-id')
+            return [
+                {
+                    'id': r.id,
+                    'receipt_number': r.receipt_number,
+                    'receipt_date': str(r.receipt_date) if r.receipt_date else None,
+                    'amount': float(r.amount) if r.amount is not None else 0.0,
+                    'payment_mode': r.payment_mode,
+                    'payment_mode_display': r.get_payment_mode_display(),
+                    'transaction_ref': r.transaction_ref,
+                    'status': r.status,
+                    'purpose': r.purpose,
+                }
+                for r in receipts
+            ]
+        except Exception:
+            return []
 
     def get_issued_inventory(self, obj):
         try:

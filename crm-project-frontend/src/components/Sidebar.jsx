@@ -147,12 +147,73 @@ function InventoryIcon(props) {
   );
 }
 
+// ✅ Advance Payment Receipt Icon
+function AdvanceReceiptIcon(props) {
+  return (
+    <svg {...props} viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="2" y1="10" x2="22" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 15h2m4 0h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // ✅ Invoice / Billing Icon
 function InvoiceIcon(props) {
   return (
     <svg {...props} viewBox="0 0 24 24" fill="none">
       <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ✅ Bill of Supply Icon
+function BillOfSupplyIcon(props) {
+  return (
+    <svg {...props} viewBox="0 0 24 24" fill="none">
+      <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 8h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ✅ Delivery Challan Icon
+function DeliveryChallanIcon(props) {
+  return (
+    <svg {...props} viewBox="0 0 24 24" fill="none">
+      <path d="M1 3h15v13H1z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 8h4l3 3v5h-7V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="5.5" cy="18.5" r="2.5" stroke="currentColor" strokeWidth="2" />
+      <circle cx="18.5" cy="18.5" r="2.5" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+// ✅ Document Subheading / Group Icon
+function DocumentIcon(props) {
+  return (
+    <svg {...props} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 4h12a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 2h12a2 2 0 012 2v12"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7 8h6M7 12h6M7 16h4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -170,7 +231,18 @@ const allSidebarItems = [
   { key: "projects", label: "Project Management", icon: ProjectIcon, path: "/projects", section: "OPERATIONS" },
   { key: "amc", label: "AMC Contracts", icon: AmcIcon, path: "/amc", section: "OPERATIONS" },
   { key: "amc_services", label: "Services", icon: ServiceIcon, path: "/amc-services", section: "OPERATIONS" },
-  { key: "invoices", label: "Invoice / Billing", icon: InvoiceIcon, path: "/invoices", section: "OPERATIONS" },
+  {
+    key: "documents",
+    label: "Document",
+    icon: DocumentIcon,
+    section: "OPERATIONS",
+    children: [
+      { key: "advance_receipts", label: "Advance Payment Receipt", icon: AdvanceReceiptIcon, path: "/advance-receipts" },
+      { key: "invoices", label: "Invoice / Billing", icon: InvoiceIcon, path: "/invoices" },
+      { key: "bill_of_supply", label: "Bill of Supply", icon: BillOfSupplyIcon, path: "/bill-of-supply" },
+      { key: "delivery_challan", label: "Delivery Challan", icon: DeliveryChallanIcon, path: "/delivery-challan" },
+    ],
+  },
   { key: "inventory", label: "Inventory", icon: InventoryIcon, path: "/inventory", section: "OPERATIONS" },
 
   // WORK LIST (Technician Field Operations - Single Unified Work Desk & Route Map)
@@ -315,19 +387,37 @@ export default function Sidebar({ children }) {
       technicians: "accounts",
       roles: "roles",
       billing: "billing",
+      advance_receipts: "invoices",
       invoices: "invoices",
+      bill_of_supply: "invoices",
+      delivery_challan: "invoices",
     };
 
-    return allSidebarItems.filter((item) => {
-      if (item.key === "work_desk" || item.key === "field_map") {
-        return true;
-      }
-      if (item.key === "technicians") {
-        return hasPermission("accounts", "view") || rName === "technician" || rName === "admin" || userInfo?.is_superuser;
-      }
-      const moduleKey = keyToModuleMap[item.key] || item.key;
-      return hasPermission(moduleKey, "view");
-    });
+    return allSidebarItems
+      .map((item) => {
+        if (item.children) {
+          const allowedChildren = item.children.filter((child) => {
+            const moduleKey = keyToModuleMap[child.key] || child.key;
+            return hasPermission(moduleKey, "view");
+          });
+          if (allowedChildren.length === 0) return null;
+          return { ...item, children: allowedChildren };
+        }
+        if (item.key === "work_desk" || item.key === "field_map") {
+          return item;
+        }
+        if (item.key === "technicians") {
+          const allowed =
+            hasPermission("accounts", "view") ||
+            rName === "technician" ||
+            rName === "admin" ||
+            userInfo?.is_superuser;
+          return allowed ? item : null;
+        }
+        const moduleKey = keyToModuleMap[item.key] || item.key;
+        return hasPermission(moduleKey, "view") ? item : null;
+      })
+      .filter(Boolean);
   }, [loadingRole, hasPermission, userRole, userInfo]);
 
   const getPageTitle = () => {
@@ -338,8 +428,19 @@ export default function Sidebar({ children }) {
     if (currentPath.startsWith("/categories")) return "Category Master";
     if (currentPath.startsWith("/billing-details")) return "Billing Details Master";
     if (currentPath.startsWith("/technicians")) return "Technician Management";
+    if (currentPath.startsWith("/advance-receipts")) return "Advance Payment Receipt";
     if (currentPath.startsWith("/invoices")) return "Invoice & Billing Management";
-    const currentItem = allSidebarItems.find(item => isActive(item.path, currentPath));
+    if (currentPath.startsWith("/bill-of-supply")) return "Bill of Supply (AMC)";
+    if (currentPath.startsWith("/delivery-challan")) return "Delivery Challan";
+    const flatItems = [];
+    allSidebarItems.forEach((item) => {
+      if (item.children) {
+        flatItems.push(...item.children);
+      } else {
+        flatItems.push(item);
+      }
+    });
+    const currentItem = flatItems.find((item) => isActive(item.path, currentPath));
     return currentItem ? currentItem.label : "Executive Dashboard";
   };
 
@@ -419,18 +520,31 @@ export default function Sidebar({ children }) {
 
                 {!isCollapsed && (
                   <div className="space-y-1 pt-0.5">
-                    {sectionItems.map((it) => (
-                      <SidebarItem
-                        key={it.key}
-                        item={it}
-                        active={isActive(it.path, currentPath)}
-                        onNavigate={() => {
-                          if (typeof window !== "undefined" && window.innerWidth < 1024) {
-                            setIsOpen(false);
-                          }
-                        }}
-                      />
-                    ))}
+                    {sectionItems.map((it) =>
+                      it.children ? (
+                        <SidebarGroupItem
+                          key={it.key}
+                          item={it}
+                          currentPath={currentPath}
+                          onNavigate={() => {
+                            if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                              setIsOpen(false);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <SidebarItem
+                          key={it.key}
+                          item={it}
+                          active={isActive(it.path, currentPath)}
+                          onNavigate={() => {
+                            if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                              setIsOpen(false);
+                            }
+                          }}
+                        />
+                      )
+                    )}
                   </div>
                 )}
               </div>
@@ -544,12 +658,23 @@ const Navbar = ({
 
   // Filter modules based on search query
   const suggestions = React.useMemo(() => {
+    const flatModules = [];
+    modules.forEach((item) => {
+      if (item.children) {
+        item.children.forEach((child) => {
+          flatModules.push({ ...child, section: item.section || "OPERATIONS" });
+        });
+      } else {
+        flatModules.push(item);
+      }
+    });
+
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return modules;
-    return modules.filter(
+    if (!query) return flatModules;
+    return flatModules.filter(
       (item) =>
         item.label.toLowerCase().includes(query) ||
-        item.section.toLowerCase().includes(query) ||
+        (item.section && item.section.toLowerCase().includes(query)) ||
         item.key.toLowerCase().includes(query)
     );
   }, [searchQuery, modules]);
@@ -859,29 +984,98 @@ const Navbar = ({
   );
 };
 
-const SidebarItem = ({ item, active, onNavigate }) => {
+const SidebarGroupItem = ({ item, currentPath, onNavigate }) => {
+  const isAnyChildActive = item.children?.some((child) => isActive(child.path, currentPath));
+  const [isOpen, setIsOpen] = useState(() => isAnyChildActive);
+
+  // Automatically expand if navigated to one of its children
+  useEffect(() => {
+    if (isAnyChildActive) {
+      setIsOpen(true);
+    }
+  }, [isAnyChildActive]);
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-150 group cursor-pointer ${
+          isAnyChildActive && !isOpen
+            ? "bg-white/10 text-white font-medium"
+            : "text-slate-400 hover:bg-white/5 hover:text-white"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex-shrink-0 transition-colors ${
+              isAnyChildActive ? "text-cyan-400" : "text-slate-500 group-hover:text-slate-300"
+            }`}
+          >
+            <item.icon className="w-[18px] h-[18px]" />
+          </span>
+          <span className="text-xs tracking-wide">{item.label}</span>
+        </div>
+
+        <svg
+          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+            isOpen ? "rotate-90 text-cyan-400" : "text-slate-500 group-hover:text-slate-300"
+          }`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth="2.5"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div className="pl-3 ml-3 border-l border-slate-800/80 space-y-1 pt-0.5">
+          {item.children?.map((child) => (
+            <SidebarItem
+              key={child.key}
+              item={child}
+              active={isActive(child.path, currentPath)}
+              onNavigate={onNavigate}
+              isChild
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SidebarItem = ({ item, active, onNavigate, isChild = false }) => {
   return (
     <Link
       to={item.path || "#"}
       onClick={onNavigate}
-      className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-150 group ${active
-        ? "bg-gradient-to-r from-cyan-600 to-teal-600 text-white font-semibold shadow-md shadow-cyan-600/20"
-        : "text-slate-400 hover:bg-white/5 hover:text-white"
-        }`}
+      className={`flex items-center justify-between px-3 ${
+        isChild ? "py-2" : "py-2.5"
+      } rounded-xl transition-all duration-150 group ${
+        active
+          ? "bg-gradient-to-r from-cyan-600 to-teal-600 text-white font-semibold shadow-md shadow-cyan-600/20"
+          : "text-slate-400 hover:bg-white/5 hover:text-white"
+      }`}
     >
       <div className="flex items-center gap-3">
-        <span className={`flex-shrink-0 transition-colors ${active ? "text-white" : "text-slate-500 group-hover:text-slate-300"
-          }`}>
-          <item.icon className="w-[18px] h-[18px]" />
+        <span
+          className={`flex-shrink-0 transition-colors ${
+            active ? "text-white" : "text-slate-500 group-hover:text-slate-300"
+          }`}
+        >
+          <item.icon className={isChild ? "w-4 h-4" : "w-[18px] h-[18px]"} />
         </span>
-        <span className="text-xs tracking-wide">
+        <span className={`${isChild ? "text-[11.5px]" : "text-xs"} tracking-wide`}>
           {item.label}
         </span>
       </div>
 
       {active && (
         <svg className="w-3 h-3 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
       )}
     </Link>

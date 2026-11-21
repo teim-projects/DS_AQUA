@@ -100,11 +100,17 @@ export default function AddInvoiceModal({
   const [saving, setSaving] = useState(false);
   const [fetchingNumber, setFetchingNumber] = useState(false);
 
+  // Document Classification: TAX_INVOICE vs PROFORMA
+  const [documentType, setDocumentType] = useState(initialInvoice?.document_type || "TAX_INVOICE");
+
   // Source Type: PROJECT, AMC, SERVICE, DIRECT
   const [invoiceType, setInvoiceType] = useState("PROJECT");
   const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId || "");
   const [selectedAmcKey, setSelectedAmcKey] = useState("");
   const [selectedAmcId, setSelectedAmcId] = useState("");
+  const [availableCycles, setAvailableCycles] = useState([]);
+  const [selectedCycleId, setSelectedCycleId] = useState("");
+  const [selectedCycle, setSelectedCycle] = useState(null);
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
 
@@ -426,6 +432,9 @@ export default function AddInvoiceModal({
           setPoNumber(data.po_number || "");
           setPoDate(data.po_date || "");
 
+          // Document Type
+          setDocumentType(data.document_type || "TAX_INVOICE");
+
           // Bill To
           setBillToCompanyName(data.bill_to_name || "");
           setBillToContact(data.bill_to_contact || "");
@@ -483,6 +492,7 @@ export default function AddInvoiceModal({
         })
         .finally(() => setLoading(false));
     } else if (initialInvoice) {
+      setDocumentType(initialInvoice.document_type || "TAX_INVOICE");
       setInvoiceType(initialInvoice.invoice_type || "PROJECT");
       setBillToCompanyName(initialInvoice.bill_to_name || "");
       setBillToAddress(initialInvoice.bill_to_address || "");
@@ -658,24 +668,81 @@ export default function AddInvoiceModal({
     });
   };
 
-  // AUTO-POPULATION: AMC Selection (including renewed cycles & start/end dates, visits, frequency)
-  const handleAmcSelect = (selectedKey) => {
-    setSelectedAmcKey(selectedKey);
-    if (!selectedKey) {
-      setSelectedAmcId("");
+  // Helper: Apply selected AMC Cycle details to Invoice lines, dates & totals
+  const applyCycleData = (amc, cycle) => {
+    setSelectedCycleId(String(cycle.id));
+    setSelectedCycle(cycle);
+
+    const isRen = cycle.cycle_number > 1;
+    const cNum = cycle.cycle_number;
+    const visits = cycle.no_of_visits || 4;
+    const freq = cycle.service_frequency_display || cycle.service_frequency || amc.service_frequency || "Quarterly";
+    const cycleLabel = isRen ? `Renewal Cycle #${cNum}` : "Initial Term";
+    const val = parseFloat(cycle.annual_value || amc.annual_value || 25000);
+    const taxable = val;
+    const gstAmt = parseFloat(((taxable * 18) / 100).toFixed(2));
+    const total = parseFloat((taxable + gstAmt).toFixed(2));
+    const cCode = amc.contract_id || `AMC-${amc.id}`;
+
+    if (isRen) {
+      setPoNumber(`${cCode} (Cycle #${cNum})`);
+    } else {
+      setPoNumber(cCode);
+    }
+    if (cycle.start_date) setPoDate(cycle.start_date);
+
+    const prodTitle = (amc.product || "Water Purifier").toUpperCase().includes("D S AQUA")
+      ? amc.product
+      : `D S AQUA ® ${(amc.product || "Water Purifier").toUpperCase()}`;
+
+    setItems([
+      {
+        item_name: `ANNUAL MAINTENANCE CONTRACT - ${prodTitle}`,
+        description: `Contract ID: ${cCode} (${cycleLabel}) | Product: ${amc.product || "Water Purifier"} | Period: ${cycle.start_date || ""} to ${cycle.end_date || ""} | Frequency: ${freq} | Total Visits: ${visits} Visits`,
+        hsn_sac: "9987",
+        quantity: 1,
+        unit: "YR",
+        price_per_unit: val,
+        discount_percent: 0,
+        discount_amount: 0,
+        gst_rate: 18,
+        gst_amount: gstAmt,
+        taxable_amount: taxable,
+        total_amount: total,
+      }
+    ]);
+
+    setActiveAmcInfo({
+      contractCode: cCode,
+      product: amc.product || "Water Purifier",
+      cycleLabel,
+      cycleNumber: cNum,
+      isRenewal: isRen,
+      startDate: cycle.start_date,
+      endDate: cycle.end_date,
+      annualValue: val,
+      noOfVisits: visits,
+      frequency: freq,
+      status: cycle.status || amc.status || "active",
+    });
+  };
+
+  // AUTO-POPULATION: AMC Contract Selection
+  const handleAmcContractSelect = (amcId) => {
+    setSelectedAmcId(amcId);
+    setSelectedCycleId("");
+    setSelectedCycle(null);
+    if (!amcId) {
       setActiveAmcInfo(null);
+      setAvailableCycles([]);
       return;
     }
 
-    const opt = amcSelectOptions.find((o) => o.key === selectedKey);
-    if (!opt) return;
+    const amc = amcList.find((c) => String(c.id) === String(amcId));
+    if (!amc) return;
 
-    setSelectedAmcId(String(opt.contractId));
-    setActiveAmcInfo(opt);
-
-    const contract = amcList.find((c) => String(c.id) === String(opt.contractId));
-    const cust = contract?.customer_details || {};
-    const company = cust.name || cust.company_name || opt.custName || "";
+    const cust = amc.customer_details || {};
+    const company = cust.name || cust.company_name || amc.customer_name || "";
     const contactPerson = cust.contact_person || "";
     const contact = cust.contact_number || cust.phone || "";
     const email = cust.email || "";
@@ -698,40 +765,76 @@ export default function AddInvoiceModal({
     const placeSupply = state.toLowerCase().includes("maharashtra") ? "27-Maharashtra" : state;
     setPlaceOfSupply(placeSupply);
 
-    const siteAddr = contract?.site_address || address;
+    const siteAddr = amc.site_address || address;
     if (shipToSameAsBillTo) {
       setShipToAddress(siteAddr);
     }
 
     if (cust.id) setSelectedCustomerId(cust.id);
-    setPoNumber(opt.contractCode);
-    if (opt.startDate) setPoDate(opt.startDate);
 
-    const val = opt.annualValue || 25000;
-    const taxable = val;
-    const gstAmt = parseFloat(((taxable * 18) / 100).toFixed(2));
-    const total = parseFloat((taxable + gstAmt).toFixed(2));
+    // Extract cycles sorted
+    const rawCycles = Array.isArray(amc.cycles) ? amc.cycles : [];
+    const cycles = [...rawCycles].sort((a, b) => (a.cycle_number || 0) - (b.cycle_number || 0));
+    setAvailableCycles(cycles);
 
-    const prodTitle = opt.product.toUpperCase().includes("D S AQUA")
-      ? opt.product
-      : `D S AQUA ® ${opt.product.toUpperCase()}`;
+    if (cycles.length > 0) {
+      const targetCycle = cycles.find((c) => c.status === "active") || cycles[cycles.length - 1];
+      applyCycleData(amc, targetCycle);
+    } else {
+      const cCode = amc.contract_id || `AMC-${amc.id}`;
+      setPoNumber(cCode);
+      if (amc.start_date) setPoDate(amc.start_date);
+      const val = parseFloat(amc.annual_value || 25000);
+      const taxable = val;
+      const gstAmt = parseFloat(((taxable * 18) / 100).toFixed(2));
+      const total = parseFloat((taxable + gstAmt).toFixed(2));
+      const prodTitle = (amc.product || "Water Purifier").toUpperCase().includes("D S AQUA")
+        ? amc.product
+        : `D S AQUA ® ${(amc.product || "Water Purifier").toUpperCase()}`;
+      setItems([
+        {
+          item_name: `ANNUAL MAINTENANCE CONTRACT - ${prodTitle}`,
+          description: `Contract ID: ${cCode} | Product: ${amc.product || "Water Purifier"} | Period: ${amc.start_date || ""} to ${amc.end_date || ""} | Frequency: ${amc.service_frequency || "Quarterly"} | Total Visits: ${amc.no_of_visits || 4} Visits`,
+          hsn_sac: "9987",
+          quantity: 1,
+          unit: "YR",
+          price_per_unit: val,
+          discount_percent: 0,
+          discount_amount: 0,
+          gst_rate: 18,
+          gst_amount: gstAmt,
+          taxable_amount: taxable,
+          total_amount: total,
+        }
+      ]);
+      setActiveAmcInfo({
+        contractCode: cCode,
+        product: amc.product || "Water Purifier",
+        cycleLabel: "Initial Term",
+        cycleNumber: 1,
+        isRenewal: false,
+        startDate: amc.start_date,
+        endDate: amc.end_date,
+        annualValue: val,
+        noOfVisits: amc.no_of_visits || 4,
+        frequency: amc.service_frequency || "Quarterly",
+        status: amc.status || "active",
+      });
+    }
+  };
 
-    setItems([
-      {
-        item_name: `ANNUAL MAINTENANCE CONTRACT - ${prodTitle}`,
-        description: `Contract ID: ${opt.contractCode} (${opt.cycleLabel}) | Product: ${opt.product} | Period: ${opt.startDate} to ${opt.endDate} | Frequency: ${opt.frequency} | Total Visits: ${opt.noOfVisits} Visits`,
-        hsn_sac: "9987",
-        quantity: 1,
-        unit: "YR",
-        price_per_unit: val,
-        discount_percent: 0,
-        discount_amount: 0,
-        gst_rate: 18,
-        gst_amount: gstAmt,
-        taxable_amount: taxable,
-        total_amount: total,
-      }
-    ]);
+  // Handler: When user selects a different Contract / Renewal Cycle
+  const handleCycleSelect = (cycleId) => {
+    setSelectedCycleId(cycleId);
+    if (!cycleId) {
+      setSelectedCycle(null);
+      return;
+    }
+    const amc = amcList.find((c) => String(c.id) === String(selectedAmcId));
+    const cyc = availableCycles.find((c) => String(c.id) === String(cycleId));
+    if (amc && cyc) {
+      applyCycleData(amc, cyc);
+    }
   };
 
   // AUTO-POPULATION: Service Selection (with equipment/product details)
@@ -1014,6 +1117,7 @@ export default function AddInvoiceModal({
 
       const payload = {
         invoice_type: invoiceType,
+        document_type: documentType,
         project: invoiceType === "PROJECT" && selectedProjectId ? parseInt(selectedProjectId) : null,
         amc_contract: invoiceType === "AMC" && selectedAmcId ? parseInt(selectedAmcId) : null,
         service: linkedServiceId,
@@ -1105,10 +1209,13 @@ export default function AddInvoiceModal({
       const method = isEdit ? "put" : "post";
       const res = await api[method](url, payload);
 
+      const isProformaDoc = documentType === "PROFORMA";
       Swal.fire({
         icon: "success",
-        title: isEdit ? "Invoice Updated" : "Invoice Created",
-        text: `Tax Invoice #${res.data?.invoice_number || invoiceNumber} saved successfully.`,
+        title: isEdit
+          ? (isProformaDoc ? "Proforma Updated" : "Invoice Updated")
+          : (isProformaDoc ? "Proforma Created" : "Invoice Created"),
+        text: `${isProformaDoc ? "Proforma Invoice" : "Tax Invoice"} #${res.data?.invoice_number || invoiceNumber} saved successfully.`,
         timer: 1600,
         showConfirmButton: false,
       });
@@ -1127,37 +1234,71 @@ export default function AddInvoiceModal({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-[9999] p-2 sm:p-4 animate-fade-in font-sans">
-      <div
-        className="bg-white rounded-xl shadow-2xl border border-slate-100 max-w-5xl w-full mx-auto relative flex flex-col overflow-hidden"
-        style={{ height: "92vh" }}
-      >
-        {/* Fixed Header */}
-        <div className="bg-white px-6 pt-5 pb-3.5 flex justify-between items-start shrink-0 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <span className="w-1.5 h-8 bg-sky-600 rounded-full block"></span>
-            <div>
-              <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-sky-600" />
-                {isEdit ? `Edit Tax Invoice #${invoiceNumber}` : "Create New Tax Invoice"}
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Generate GST-compliant tax invoices auto-filled from Projects, AMC Contracts, or Services
-              </p>
-            </div>
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4 animate-fade-in font-sans">
+      <div className="bg-white rounded-xl shadow-xl border border-slate-100 max-w-3xl w-full mx-auto my-6 relative max-h-[92vh] flex flex-col overflow-hidden">
+        {/* Header Bar matching AddLeadForm */}
+        <div className="bg-white px-6 pt-5 pb-3 flex justify-between items-start border-b border-slate-100 shrink-0">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900">
+              {isEdit
+                ? `Edit ${documentType === "PROFORMA" ? "Proforma Invoice" : "Tax Invoice"} #${invoiceNumber}`
+                : `Add ${documentType === "PROFORMA" ? "Proforma Invoice" : "Tax Invoice"}`}
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {documentType === "PROFORMA"
+                ? "Generate quotation or advance proforma invoices auto-filled from Projects, AMC Contracts, or Services"
+                : "Generate GST-compliant tax invoices auto-filled from Projects, AMC Contracts, or Services"}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-50 cursor-pointer"
+            title="Close"
           >
-            <RxCross2 size={20} />
+            <RxCross2 size={18} />
           </button>
         </div>
 
-        {/* Scrollable Form Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 scrollbar-thin">
-          <form onSubmit={handleSubmit} className="space-y-6 text-slate-800">
+        {/* Form Body */}
+        <div className="p-6 overflow-y-auto flex-1 scrollbar-thin text-slate-800">
+          <form id="taxInvoiceForm" onSubmit={handleSubmit} className="space-y-6">
+            {/* DOCUMENT TYPE SELECTOR (Tax Invoice vs Proforma Invoice) */}
+            <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                  Invoice Document Classification
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Choose whether to issue an official GST Tax Invoice or an advance Proforma Invoice
+                </span>
+              </div>
+              <div className="flex items-center bg-white p-1 rounded-lg border border-slate-200 shadow-2xs gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDocumentType("TAX_INVOICE")}
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    documentType === "TAX_INVOICE"
+                      ? "bg-sky-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Tax Invoice
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDocumentType("PROFORMA")}
+                  className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    documentType === "PROFORMA"
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  Proforma Invoice
+                </button>
+              </div>
+            </div>
+
             {/* 1. SOURCE SELECTOR TABS */}
             <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-3">
               <div className="flex items-center justify-between">
@@ -1181,7 +1322,19 @@ export default function AddInvoiceModal({
                     <button
                       type="button"
                       key={tab.type}
-                      onClick={() => setInvoiceType(tab.type)}
+                      onClick={() => {
+                        setInvoiceType(tab.type);
+                        setSelectedProjectId("");
+                        setSelectedAmcId("");
+                        setSelectedCycleId("");
+                        setSelectedCycle(null);
+                        setAvailableCycles([]);
+                        setSelectedServiceId("");
+                        setSelectedCustomerId("");
+                        setActiveAmcInfo(null);
+                        setActiveProjectInfo(null);
+                        setActiveServiceInfo(null);
+                      }}
                       className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${isSelected
                         ? "border-sky-600 bg-sky-50 text-sky-900 ring-2 ring-sky-500/20 shadow-xs"
                         : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"
@@ -1246,22 +1399,64 @@ export default function AddInvoiceModal({
                 )}
 
                 {invoiceType === "AMC" && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Select AMC Contract & Term / Renewal <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={selectedAmcKey}
-                      onChange={(e) => handleAmcSelect(e.target.value)}
-                      className="w-full text-xs font-medium border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-hidden focus:ring-1 focus:ring-sky-500"
-                    >
-                      <option value="">-- Choose AMC Contract / Renewal Term ({amcSelectOptions.length} available) --</option>
-                      {amcSelectOptions.map((opt) => (
-                        <option key={opt.key} value={opt.key}>
-                          {opt.displayLabel}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Select AMC Contract <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={selectedAmcId}
+                        onChange={(e) => handleAmcContractSelect(e.target.value)}
+                        className="w-full text-xs font-medium border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-hidden focus:ring-1 focus:ring-sky-500"
+                      >
+                        <option value="">-- Choose AMC Contract ({amcList.length} available) --</option>
+                        {amcList.map((c) => {
+                          const custName = c.customer_details?.name || c.customer_details?.company_name || c.customer_name || "Customer";
+                          const prod = c.product || "Water Purifier";
+                          const cycCount = Array.isArray(c.cycles) ? c.cycles.length : 0;
+                          const hasRen = cycCount > 1 || (c.cycles && c.cycles.some((cyc) => cyc.cycle_number > 1));
+                          return (
+                            <option key={c.id} value={c.id}>
+                              {c.contract_id || `AMC-${c.id}`} • {custName} — {prod} (₹{parseFloat(c.annual_value || 0).toLocaleString()}){" "}
+                              {hasRen ? `[🔄 Renewals: ${cycCount} Terms]` : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {/* RENEWAL CYCLE SELECTOR - Appears when selected AMC has renewals */}
+                    {selectedAmcId && (availableCycles.length > 1 || availableCycles.some((cyc) => cyc.cycle_number > 1)) && (
+                      <div className="bg-sky-50/70 border border-sky-200/90 rounded-lg p-3 space-y-2 animate-fade-in">
+                        <label className="block text-xs font-semibold text-slate-700 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-sky-900">
+                            <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+                            Select Contract / Renewal Cycle:
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300">
+                            🔄 AMC Renewals Available ({availableCycles.length} terms)
+                          </span>
+                        </label>
+                        <select
+                          value={selectedCycleId}
+                          onChange={(e) => handleCycleSelect(e.target.value)}
+                          className="w-full px-3 py-2 text-xs font-medium border border-sky-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-sky-500 bg-white shadow-2xs"
+                        >
+                          {availableCycles.map((cyc) => {
+                            const isRen = cyc.cycle_number > 1;
+                            const termLabel = isRen ? `Cycle #${cyc.cycle_number} - AMC Renewal` : `Cycle #1 - Initial Term`;
+                            const dates = cyc.start_date && cyc.end_date ? `(${cyc.start_date} to ${cyc.end_date})` : "";
+                            const val = parseFloat(cyc.annual_value || 0).toLocaleString();
+                            const st = cyc.status ? `[${cyc.status.toUpperCase()}]` : "";
+                            return (
+                              <option key={cyc.id} value={cyc.id}>
+                                {termLabel} {dates} • ₹{val} {st}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    )}
 
                     {/* Active AMC & Renewal Details Card */}
                     {activeAmcInfo && (
@@ -1270,11 +1465,11 @@ export default function AddInvoiceModal({
                           <div className="flex items-center gap-1.5">
                             <Repeat className="w-3.5 h-3.5 text-sky-700" />
                             <span className="text-xs font-bold text-sky-950 uppercase tracking-wider">
-                              AMC Contract & Renewal Term Details
+                              AMC Contract &amp; Renewal Term Details
                             </span>
                           </div>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                            activeAmcInfo.isRenewal ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-sky-100 text-sky-800 border-sky-200"
+                            activeAmcInfo.isRenewal ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"
                           }`}>
                             {activeAmcInfo.cycleLabel} • {activeAmcInfo.status.toUpperCase()}
                           </span>
@@ -2056,25 +2251,38 @@ export default function AddInvoiceModal({
               </div>
             </div>
 
-            {/* Bottom Actions */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-6 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg shadow-md shadow-sky-600/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <MdSave className="text-base" />
-                {saving ? "Saving Invoice..." : isEdit ? "Update Tax Invoice" : "Create Tax Invoice"}
-              </button>
-            </div>
           </form>
+        </div>
+
+        {/* Footer Bar matching AddLeadForm & AddBillOfSupplyModal */}
+        <div className="bg-slate-50 px-6 py-3 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="taxInvoiceForm"
+            disabled={saving}
+            className={`px-5 py-2 text-xs font-semibold text-white rounded-lg transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+              documentType === "PROFORMA"
+                ? "bg-amber-600 hover:bg-amber-700 shadow-amber-500/10"
+                : "bg-sky-600 hover:bg-sky-700 shadow-sky-500/10"
+            }`}
+          >
+            {saving
+              ? "Saving..."
+              : isEdit
+              ? documentType === "PROFORMA"
+                ? "Update Proforma Invoice"
+                : "Update Tax Invoice"
+              : documentType === "PROFORMA"
+              ? "Save & Generate Proforma"
+              : "Save & Generate Invoice"}
+          </button>
         </div>
       </div>
     </div>,

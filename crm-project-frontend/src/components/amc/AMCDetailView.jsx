@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { MapPin, Navigation, ExternalLink } from "lucide-react";
@@ -20,6 +20,9 @@ import {
   MdOutlineChatBubbleOutline,
   MdOutlineRemoveRedEye,
   MdHistory,
+  MdOutlinePayment,
+  MdCheckCircle,
+  MdPictureAsPdf,
 } from "react-icons/md";
 import { FaWhatsapp } from "react-icons/fa";
 import SendMessageModal from "../templates/SendMessageModal";
@@ -74,6 +77,42 @@ export default function AMCDetailView({
   }
 
   const safeAmc = amc || {};
+  const BASE_API = (baseApi || import.meta.env.VITE_BASE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+
+  // Advance Payment Receipts State
+  const [advanceReceipts, setAdvanceReceipts] = useState(safeAmc.advance_receipts || []);
+  const [loadingAdvanceReceipts, setLoadingAdvanceReceipts] = useState(false);
+
+  useEffect(() => {
+    if (safeAmc.advance_receipts && Array.isArray(safeAmc.advance_receipts)) {
+      setAdvanceReceipts(safeAmc.advance_receipts);
+    }
+    const fetchAdvanceReceipts = async () => {
+      if (!safeAmc?.id) return;
+      setLoadingAdvanceReceipts(true);
+      try {
+        const res = await fetch(`${BASE_API}/invoice/advance-receipts/?amc_contract=${safeAmc.id}&limit=50`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data.results) ? data.results : Array.isArray(data) ? data : [];
+          setAdvanceReceipts(list);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch advance receipts for AMC:", e);
+      } finally {
+        setLoadingAdvanceReceipts(false);
+      }
+    };
+    fetchAdvanceReceipts();
+  }, [safeAmc?.id, BASE_API, token]);
+
+  const contractAnnualValue = parseFloat(safeAmc.annual_value || 0);
+  const totalAdvancePaid = useMemo(() => {
+    return (advanceReceipts || []).reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+  }, [advanceReceipts]);
+  const balanceRemaining = Math.max(0, contractAnnualValue - totalAdvancePaid);
 
   const formatSafeDate = (d) => {
     if (!d) return "—";
@@ -627,11 +666,18 @@ export default function AMCDetailView({
               Contract value
             </span>
             <span className="text-xs sm:text-[13px] font-bold text-slate-900 block mt-0.5">
-              ₹{parseFloat(amc.annual_value || 0).toLocaleString("en-IN")}
+              ₹{contractAnnualValue.toLocaleString("en-IN")}
             </span>
-            <span className="text-[10px] text-slate-400 font-normal block mt-0.5 capitalize">
-              {amc.payment_frequency_display || amc.payment_frequency || "Quarterly"} billing
-            </span>
+            {totalAdvancePaid > 0 ? (
+              <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5" title={`₹${totalAdvancePaid.toLocaleString("en-IN")} Advance Paid`}>
+                <MdCheckCircle size={11} className="text-emerald-500 shrink-0" />
+                <span>₹{totalAdvancePaid.toLocaleString("en-IN")} Advance Paid</span>
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-400 font-normal block mt-0.5 capitalize">
+                {amc.payment_frequency_display || amc.payment_frequency || "Quarterly"} billing
+              </span>
+            )}
           </div>
 
           {/* KPI 3: Service manager */}
@@ -1082,6 +1128,99 @@ export default function AMCDetailView({
                   <span className="text-slate-400 font-normal">Major spare parts</span>
                   <span className="font-semibold text-slate-500">Excluded</span>
                 </div>
+              </div>
+            </div>
+
+            {/* CARD: Advance Payments & Receipts */}
+            <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-1.5">
+                  <MdOutlinePayment className="text-emerald-600" size={16} />
+                  <h3 className="text-xs font-bold text-slate-900">Advance Payments</h3>
+                </div>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    totalAdvancePaid >= contractAnnualValue && contractAnnualValue > 0
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : totalAdvancePaid > 0
+                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                      : "bg-slate-100 text-slate-600 border border-slate-200"
+                  }`}
+                >
+                  {totalAdvancePaid >= contractAnnualValue && contractAnnualValue > 0
+                    ? "Fully Paid"
+                    : totalAdvancePaid > 0
+                    ? "Advance Received"
+                    : "Pending"}
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Contract Annual Value</span>
+                  <span className="font-semibold text-slate-900">
+                    ₹{contractAnnualValue.toLocaleString("en-IN")}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                    <MdCheckCircle className="text-emerald-600 text-sm" />
+                    Advance Received
+                  </span>
+                  <span className="font-bold text-emerald-700 text-sm">
+                    ₹{totalAdvancePaid.toLocaleString("en-IN")}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                  <span className="font-semibold text-slate-700">Remaining Balance</span>
+                  <span className={`font-bold ${balanceRemaining > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                    ₹{balanceRemaining.toLocaleString("en-IN")}
+                  </span>
+                </div>
+
+                {/* List of Advance Receipts */}
+                {advanceReceipts.length > 0 ? (
+                  <div className="mt-2 pt-2 border-t border-dashed border-slate-200 space-y-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Advance Receipts ({advanceReceipts.length})
+                    </span>
+                    {advanceReceipts.map((apr) => (
+                      <div
+                        key={apr.id}
+                        className="p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-100 flex items-center justify-between text-[11px]"
+                      >
+                        <div>
+                          <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                            <span>{apr.receipt_number}</span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] bg-white border border-emerald-200 text-emerald-700 font-semibold">
+                              ₹{parseFloat(apr.amount || 0).toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                            {apr.receipt_date} • {apr.payment_mode_display || apr.payment_mode || "Online"}
+                            {apr.transaction_ref ? ` • Ref: ${apr.transaction_ref}` : ""}
+                          </span>
+                        </div>
+                        <a
+                          href={`${BASE_API}/invoice/advance-receipts/${apr.id}/pdf/?disposition=inline`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-colors shrink-0"
+                          title="View / Download Advance Receipt PDF"
+                        >
+                          <MdPictureAsPdf size={12} />
+                          <span>PDF</span>
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-2 text-[10px] text-slate-400 italic text-center py-1">
+                    No advance payment receipts created yet
+                  </div>
+                )}
               </div>
             </div>
 

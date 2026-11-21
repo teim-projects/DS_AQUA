@@ -569,6 +569,27 @@ class ProjectSerializer(serializers.ModelSerializer):
     amc_contract_id = serializers.SerializerMethodField()
     amc_service_frequency = serializers.SerializerMethodField()
     amc_no_of_visits = serializers.SerializerMethodField()
+    advance_receipts = serializers.SerializerMethodField()
+
+    def get_advance_receipts(self, obj):
+        try:
+            receipts = obj.advance_receipts.all().order_by('-id')
+            return [
+                {
+                    'id': r.id,
+                    'receipt_number': r.receipt_number,
+                    'receipt_date': str(r.receipt_date) if r.receipt_date else None,
+                    'amount': float(r.amount) if r.amount is not None else 0.0,
+                    'payment_mode': r.payment_mode,
+                    'payment_mode_display': r.get_payment_mode_display(),
+                    'transaction_ref': r.transaction_ref,
+                    'status': r.status,
+                    'purpose': r.purpose,
+                }
+                for r in receipts
+            ]
+        except Exception:
+            return []
 
     def get_has_amc(self, obj):
         try:

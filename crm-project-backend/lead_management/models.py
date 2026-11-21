@@ -647,7 +647,8 @@ class Project(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.project_code or ''} - {self.customer.company_name if self.customer else 'No Customer'}"
+        c_name = getattr(self.customer, 'name', None) or getattr(self.customer, 'company_name', None) or 'No Customer'
+        return f"{self.project_code or ''} - {c_name}"
 
     class Meta:
         ordering = ['-created_at']

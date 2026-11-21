@@ -94,6 +94,10 @@ export default function ServiceDetailView({
   const [previewImage, setPreviewImage] = useState(null);
   const [attachmentFilter, setAttachmentFilter] = useState("all");
 
+  // Advance Payment Receipts
+  const [advanceReceipts, setAdvanceReceipts] = useState(service.advance_receipts || []);
+  const [loadingAdvanceReceipts, setLoadingAdvanceReceipts] = useState(false);
+
   const filteredAttachments = useMemo(() => {
     if (attachmentFilter === "all") return attachments;
     if (attachmentFilter === "document") {
@@ -110,6 +114,36 @@ export default function ServiceDetailView({
   const roleName = (userRole?.name || userInfo?.role_name || userInfo?.role?.name || "").toLowerCase();
   const isTechnician = roleName === "technician" || roleName.includes("technician") || Boolean(userInfo?.is_technician);
   const canDirectIssue = isSuperUser || roleName === "admin" || roleName === "superuser" || hasPermission("inventory", "create") || hasPermission("inventory", "edit");
+
+  // Fetch Advance Payment Receipts for this Service
+  useEffect(() => {
+    if (!currentService?.id) return;
+    let isMounted = true;
+    setLoadingAdvanceReceipts(true);
+    const authToken = token || localStorage.getItem("access") || localStorage.getItem("token") || "";
+    fetch(`${BASE_API}/invoice/advance-receipts/?service=${currentService.id}&limit=50`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
+      .then((data) => {
+        if (!isMounted) return;
+        const list = Array.isArray(data) ? data : data?.results || [];
+        setAdvanceReceipts(list);
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch advance receipts for service:", err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingAdvanceReceipts(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentService?.id, BASE_API, token]);
 
   // Load and manage tasks for this service from localStorage
   const tasksStorageKey = `service_tasks_${currentService?.id || "temp"}`;
@@ -509,6 +543,10 @@ export default function ServiceDetailView({
   const serviceCost = parseFloat(currentService.service_cost || 2500);
   const taxes = Math.round(serviceCost * 0.18);
   const totalPayable = serviceCost + taxes;
+  const totalAdvancePaid = useMemo(() => {
+    return (advanceReceipts || []).reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+  }, [advanceReceipts]);
+  const balanceRemaining = Math.max(0, totalPayable - totalAdvancePaid);
 
   const completedTasksCount = tasks.filter((t) => t.completed).length;
   const taskProgressPercent = Math.round((completedTasksCount / Math.max(1, tasks.length)) * 100);
@@ -1038,15 +1076,22 @@ export default function ServiceDetailView({
                 ? "Chargeable Service"
                 : "Warranty / Included"}
             </span>
-            <span className="text-[10px] text-slate-500 font-normal block mt-0.5 truncate">
-              {isAMCVisit
-                ? currentService.contract_id
-                  ? `Covered under AMC (${currentService.contract_id}) · Scheduled Visit`
-                  : "Contract covered · Scheduled AMC visit"
-                : parseFloat(currentService.service_cost || 0) > 0
-                ? `Standard on-demand billing · ₹${parseFloat(currentService.service_cost).toLocaleString("en-IN")}`
-                : "Warranty covered · Complimentary"}
-            </span>
+            {totalAdvancePaid > 0 ? (
+              <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5" title={`₹${totalAdvancePaid.toLocaleString("en-IN")} Advance Paid`}>
+                <MdCheckCircle size={11} className="text-emerald-500 shrink-0" />
+                <span>₹{totalAdvancePaid.toLocaleString("en-IN")} Advance Paid</span>
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-500 font-normal block mt-0.5 truncate">
+                {isAMCVisit
+                  ? currentService.contract_id
+                    ? `Covered under AMC (${currentService.contract_id}) · Scheduled Visit`
+                    : "Contract covered · Scheduled AMC visit"
+                  : parseFloat(currentService.service_cost || 0) > 0
+                  ? `Standard on-demand billing · ₹${parseFloat(currentService.service_cost).toLocaleString("en-IN")}`
+                  : "Warranty covered · Complimentary"}
+              </span>
+            )}
           </div>
 
           {/* KPI 2: Assigned technician */}
@@ -2345,14 +2390,29 @@ export default function ServiceDetailView({
               </div>
             </div>
 
-            {/* BOX 2: Payment (From Figma Screenshot) */}
+            {/* BOX 2: Payment & Advance Receipts */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6 space-y-4">
               <div className="flex items-center justify-between pb-1 border-b border-slate-100">
-                <h2 className="text-xs sm:text-[13px] font-bold text-slate-900 leading-tight">
-                  Payment
-                </h2>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 uppercase">
-                  Paid
+                <div className="flex items-center gap-1.5">
+                  <MdOutlinePayment className="text-emerald-600 text-base" />
+                  <h2 className="text-xs sm:text-[13px] font-bold text-slate-900 leading-tight">
+                    Payment Details
+                  </h2>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                    totalAdvancePaid >= totalPayable && totalPayable > 0
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                      : totalAdvancePaid > 0
+                      ? "bg-amber-50 text-amber-700 border border-amber-200/60"
+                      : "bg-slate-100 text-slate-600 border border-slate-200"
+                  }`}
+                >
+                  {totalAdvancePaid >= totalPayable && totalPayable > 0
+                    ? "Fully Paid"
+                    : totalAdvancePaid > 0
+                    ? "Advance Received"
+                    : "Pending"}
                 </span>
               </div>
 
@@ -2376,6 +2436,64 @@ export default function ServiceDetailView({
                   <span className="font-bold text-slate-900 text-sm">
                     ₹{totalPayable.toLocaleString("en-IN")}
                   </span>
+                </div>
+
+                {/* Advance Payments Received Section */}
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                      <MdCheckCircle className="text-emerald-600 text-sm" />
+                      Advance Received
+                    </span>
+                    <span className="font-bold text-emerald-700 text-sm">
+                      ₹{totalAdvancePaid.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-700">Remaining Balance</span>
+                    <span className={`font-bold ${balanceRemaining > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                      ₹{balanceRemaining.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+
+                  {/* List of Advance Receipts */}
+                  {advanceReceipts.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-dashed border-slate-200 space-y-2">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Advance Receipts ({advanceReceipts.length})
+                      </span>
+                      {advanceReceipts.map((apr) => (
+                        <div
+                          key={apr.id}
+                          className="p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-100 flex items-center justify-between text-[11px]"
+                        >
+                          <div>
+                            <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                              <span>{apr.receipt_number}</span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-white border border-emerald-200 text-emerald-700 font-semibold">
+                                ₹{parseFloat(apr.amount || 0).toLocaleString("en-IN")}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                              {apr.receipt_date} • {apr.payment_mode_display || apr.payment_mode || "Online"}
+                              {apr.transaction_ref ? ` • Ref: ${apr.transaction_ref}` : ""}
+                            </span>
+                          </div>
+                          <a
+                            href={`${BASE_API}/invoice/advance-receipts/${apr.id}/pdf/?disposition=inline`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-colors shrink-0"
+                            title="View / Download Advance Receipt PDF"
+                          >
+                            <MdPictureAsPdf size={12} />
+                            <span>PDF</span>
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

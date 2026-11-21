@@ -560,11 +560,11 @@ export default function Technicians() {
 
             <button
               onClick={() => setIsFilterOpen(true)}
-              className="px-2.5 py-1.5 bg-white text-slate-700 text-xs font-medium rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+              className="px-2.5 sm:px-3.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap cursor-pointer"
               title="Filter Technicians"
             >
-              <MdFilterList className="text-slate-500 text-sm" />
-              <span>Filters</span>
+              <MdFilterList className="text-slate-400" />
+              Filter
             </button>
 
             <button
@@ -721,27 +721,29 @@ export default function Technicians() {
         </div>
       </div>
 
-      {/* FILTER DRAWER / MODAL VIA PORTAL */}
-      {isFilterOpen &&
+      {/* FILTER DRAWER - PORTAL TO BODY PREVENTS LAYOUT PUSH AND WHITE BOTTOM STRIP */}
+      {typeof document !== "undefined" &&
         createPortal(
           <>
+            {isFilterOpen && (
+              <div
+                className="fixed inset-0 w-screen h-screen bg-black/40 z-[9999]"
+                onClick={() => setIsFilterOpen(false)}
+              />
+            )}
+
             <div
-              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 transition-opacity"
-              onClick={() => setIsFilterOpen(false)}
-            />
-            <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-white shadow-2xl z-50 flex flex-col border-l border-slate-200">
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-2">
-                  <MdFilterList className="text-blue-600 text-lg" />
-                  <h3 className="text-sm font-bold text-slate-800">
-                    Filter Technicians
-                  </h3>
-                </div>
+              className={`fixed top-0 right-0 h-screen w-full max-w-[380px] sm:w-[380px] bg-white shadow-2xl z-[10000] flex flex-col transition-transform duration-300 ease-in-out ${
+                isFilterOpen ? "translate-x-0" : "translate-x-full"
+              }`}
+            >
+              <div className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0">
+                <h3 className="text-lg font-bold text-slate-900">Filters</h3>
                 <button
                   onClick={() => setIsFilterOpen(false)}
                   className="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 cursor-pointer"
                 >
-                  ✕
+                  ×
                 </button>
               </div>
               <div className="p-5 overflow-y-auto flex-1">

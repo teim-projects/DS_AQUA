@@ -22,9 +22,13 @@ import {
   MdAccountBalance,
   MdFilterList,
   MdCardGiftcard,
+  MdReceipt,
+  MdLocalShipping,
+  MdPayment,
 } from "react-icons/md";
 import { FaWhatsapp } from "react-icons/fa";
 import SendMessageModal from "../templates/SendMessageModal";
+import TableView from "../TableView";
 
 export default function CustomerDetailView({
   customer,
@@ -41,7 +45,7 @@ export default function CustomerDetailView({
   const navigate = useNavigate();
   const BASE_API = (baseApi || import.meta.env.VITE_BASE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
-  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "services" | "amc" | "quotations" | "projects" | "referrals"
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "services" | "amc" | "quotations" | "invoices" | "bill_of_supply" | "delivery_challans" | "advance_receipts" | "projects" | "referrals"
   const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Related data states
@@ -51,6 +55,10 @@ export default function CustomerDetailView({
   const [projects, setProjects] = useState([]);
   const [referrals, setReferrals] = useState([]);
   const [referralPoints, setReferralPoints] = useState(0);
+  const [invoices, setInvoices] = useState([]);
+  const [billsOfSupply, setBillsOfSupply] = useState([]);
+  const [deliveryChallans, setDeliveryChallans] = useState([]);
+  const [advanceReceipts, setAdvanceReceipts] = useState([]);
   const [loadingRelated, setLoadingRelated] = useState(true);
 
   // Send message modal
@@ -67,18 +75,22 @@ export default function CustomerDetailView({
     [token]
   );
 
-  // Fetch all related context (Services, AMC Contracts, Quotations, Projects, Referrals)
+  // Fetch all related context (Services, AMC Contracts, Quotations, Invoices, Bills of Supply, Delivery Challans, Advance Receipts, Projects, Referrals)
   const fetchCustomerRelatedData = useCallback(async () => {
     if (!customerId) return;
     setLoadingRelated(true);
 
     try {
-      const [srvRes, amcRes, quoteRes, prjRes, refRes] = await Promise.allSettled([
+      const [srvRes, amcRes, quoteRes, prjRes, refRes, invRes, bosRes, dcRes, aprRes] = await Promise.allSettled([
         fetch(`${BASE_API}/amc/services/?customer=${customerId}&limit=100`, { headers: authHeaders }),
         fetch(`${BASE_API}/amc/contracts/?customer=${customerId}&limit=100`, { headers: authHeaders }),
         fetch(`${BASE_API}/quotation/quotation/?customer=${customerId}&limit=100`, { headers: authHeaders }),
         fetch(`${BASE_API}/lead/projects/?customer=${customerId}&limit=100`, { headers: authHeaders }),
         fetch(`${BASE_API}/lead/customer/${customerId}/referrals/`, { headers: authHeaders }),
+        fetch(`${BASE_API}/invoice/invoices/?customer=${customerId}&limit=100`, { headers: authHeaders }),
+        fetch(`${BASE_API}/invoice/bill-of-supply/?customer=${customerId}&limit=100`, { headers: authHeaders }),
+        fetch(`${BASE_API}/invoice/delivery-challans/?customer=${customerId}&limit=100`, { headers: authHeaders }),
+        fetch(`${BASE_API}/invoice/advance-receipts/?customer=${customerId}&limit=100`, { headers: authHeaders }),
       ]);
 
       // Services
@@ -100,6 +112,34 @@ export default function CustomerDetailView({
         const data = await quoteRes.value.json();
         const list = Array.isArray(data.results) ? data.results : Array.isArray(data) ? data : [];
         setQuotations(list);
+      }
+
+      // Invoices
+      if (invRes.status === "fulfilled" && invRes.value.ok) {
+        const data = await invRes.value.json();
+        const list = Array.isArray(data.results) ? data.results : Array.isArray(data) ? data : [];
+        setInvoices(list);
+      }
+
+      // Bill of Supply
+      if (bosRes.status === "fulfilled" && bosRes.value.ok) {
+        const data = await bosRes.value.json();
+        const list = Array.isArray(data.results) ? data.results : Array.isArray(data) ? data : [];
+        setBillsOfSupply(list);
+      }
+
+      // Delivery Challans
+      if (dcRes.status === "fulfilled" && dcRes.value.ok) {
+        const data = await dcRes.value.json();
+        const list = Array.isArray(data.results) ? data.results : Array.isArray(data) ? data : [];
+        setDeliveryChallans(list);
+      }
+
+      // Advance Payment Receipts
+      if (aprRes.status === "fulfilled" && aprRes.value.ok) {
+        const data = await aprRes.value.json();
+        const list = Array.isArray(data.results) ? data.results : Array.isArray(data) ? data : [];
+        setAdvanceReceipts(list);
       }
 
       // Projects
@@ -226,6 +266,65 @@ export default function CustomerDetailView({
     return sum + (isNaN(val) ? 0 : val);
   }, 0);
 
+  const totalInvoicedValue = invoices.reduce((sum, inv) => {
+    const val = parseFloat(inv.grand_total || 0);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  const totalBillOfSupplyValue = billsOfSupply.reduce((sum, b) => {
+    const val = parseFloat(b.grand_total || 0);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  const totalAdvanceReceived = advanceReceipts.reduce((sum, rec) => {
+    const val = parseFloat(rec.amount || 0);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  const handleViewPDF = async (url, docTitle = "Document") => {
+    Swal.fire({
+      title: `Opening ${docTitle}...`,
+      html: `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 0;">
+          <div style="width: 44px; height: 44px; border: 4px solid #e2e8f0; border-top: 4px solid #0284c7; border-radius: 50%; animation: spinPdf 0.9s linear infinite; margin-bottom: 12px;"></div>
+          <p style="font-size: 13px; color: #475569; margin: 0; font-weight: 500;">Generating document, please wait...</p>
+        </div>
+        <style>
+          @keyframes spinPdf { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      `,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+    });
+
+    try {
+      const response = await fetch(url, { headers: authHeaders });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const contentType = response.headers.get("content-type") || "";
+      const fileType = contentType.includes("pdf") ? "application/pdf" : "text/html";
+      const fileURL = URL.createObjectURL(new Blob([blob], { type: fileType }));
+      Swal.close();
+      const newWin = window.open(fileURL, "_blank");
+      if (!newWin || newWin.closed || typeof newWin.closed === "undefined") {
+        const link = document.createElement("a");
+        link.href = fileURL;
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.error(err);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: `Failed to open ${docTitle} PDF.`,
+      });
+    }
+  };
+
   const customerPhone = customer.contact_number || customer.phone || "";
   const customerEmail = customer.email || "";
   const customerName = customer.name || customer.company_name || "Customer";
@@ -254,6 +353,690 @@ export default function CustomerDetailView({
     }
     window.location.href = `tel:${customerPhone}`;
   };
+
+  // Reusable TableView Pagination states
+  const [tabPages, setTabPages] = useState({
+    services: 1,
+    amc: 1,
+    quotations: 1,
+    invoices: 1,
+    bill_of_supply: 1,
+    delivery_challans: 1,
+    advance_receipts: 1,
+    projects: 1,
+    referrals: 1,
+  });
+
+  const handleTabPageChange = (tabKey, newPage) => {
+    setTabPages((prev) => ({ ...prev, [tabKey]: newPage }));
+  };
+
+  const getTabPagedRows = (list, tabKey, pageSize = 10) => {
+    const page = tabPages[tabKey] || 1;
+    const totalPages = Math.max(1, Math.ceil((list?.length || 0) / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const startIdx = (safePage - 1) * pageSize;
+    const rows = (list || []).slice(startIdx, startIdx + pageSize);
+    return { page: safePage, totalPages, rows, pageSize };
+  };
+
+  // 1. Services Columns
+  const serviceColumns = useMemo(
+    () => [
+      {
+        key: "service_number",
+        label: "Service No",
+        className: "whitespace-nowrap font-bold text-sky-700",
+        render: (srv) => srv.service_number || `#SRV-${srv.id}`,
+      },
+      {
+        key: "service_date",
+        label: "Date",
+        className: "whitespace-nowrap text-slate-600",
+        render: (srv) => formatDt(srv.service_date),
+      },
+      {
+        key: "service_type",
+        label: "Type",
+        className: "whitespace-nowrap font-medium text-slate-800 capitalize",
+        render: (srv) => srv.service_type_display || srv.service_type || "Routine",
+      },
+      {
+        key: "service_category",
+        label: "Category",
+        className: "whitespace-nowrap",
+        render: (srv) => (
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+              srv.service_category === "amc_service"
+                ? "bg-purple-50 text-purple-700 border-purple-200"
+                : "bg-sky-50 text-sky-700 border-sky-200"
+            }`}
+          >
+            {srv.service_category === "amc_service" ? "AMC Service" : "On-Demand"}
+          </span>
+        ),
+      },
+      {
+        key: "technician",
+        label: "Technician",
+        className: "whitespace-nowrap text-slate-700",
+        render: (srv) => {
+          const techs = Array.isArray(srv.technicians_details) ? srv.technicians_details : [];
+          const techName = techs[0]
+            ? `${techs[0].first_name || ""} ${techs[0].last_name || ""}`.trim() || techs[0].username
+            : srv.service_engineer_details?.full_name || "Unassigned";
+          return (
+            <span className="flex items-center justify-center gap-1 font-medium">
+              <MdEngineering size={12} className="text-slate-400" />
+              {techName}
+            </span>
+          );
+        },
+      },
+      {
+        key: "status",
+        label: "Status",
+        className: "whitespace-nowrap",
+        render: (srv) => (
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${
+              srv.status === "completed"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : srv.status === "in_progress"
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : srv.status === "cancelled"
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : "bg-sky-50 text-sky-700 border-sky-200"
+            }`}
+          >
+            {srv.status_display || srv.status || "Scheduled"}
+          </span>
+        ),
+      },
+      {
+        key: "service_cost",
+        label: "Cost",
+        className: "whitespace-nowrap text-right font-semibold text-slate-900",
+        render: (srv) => `₹${parseFloat(srv.service_cost || 0).toLocaleString("en-IN")}`,
+      },
+    ],
+    []
+  );
+
+  // 2. AMC Columns
+  const amcColumns = useMemo(
+    () => [
+      {
+        key: "contract_id",
+        label: "Contract ID",
+        className: "whitespace-nowrap font-bold text-sky-700 font-mono",
+        render: (c) => c.contract_id || `#AMC-${c.id}`,
+      },
+      {
+        key: "period",
+        label: "Period (Start — End)",
+        className: "whitespace-nowrap text-slate-700",
+        render: (c) => (
+          <span>
+            <span className="font-medium text-slate-800">{formatDt(c.start_date)}</span>
+            <span className="text-slate-400 mx-1">to</span>
+            <span className="font-medium text-slate-800">{formatDt(c.end_date)}</span>
+          </span>
+        ),
+      },
+      {
+        key: "annual_value",
+        label: "Annual Value",
+        className: "whitespace-nowrap text-right font-bold text-emerald-700",
+        render: (c) => `₹${parseFloat(c.annual_value || 0).toLocaleString("en-IN")}`,
+      },
+      {
+        key: "frequency",
+        label: "Frequency & Visits",
+        className: "whitespace-nowrap capitalize text-slate-700",
+        render: (c) => (
+          <div>
+            <span className="font-semibold block">{c.service_frequency_display || c.service_frequency || "Quarterly"}</span>
+            <span className="text-[10px] text-slate-500 block">
+              ({c.no_of_visits !== undefined && c.no_of_visits !== null ? c.no_of_visits : 4} visits)
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "coordinator",
+        label: "Coordinator",
+        className: "whitespace-nowrap text-slate-700",
+        render: (c) => c.support_coordinator_details?.full_name || c.support_coordinator_details?.username || "—",
+      },
+      {
+        key: "status",
+        label: "Status",
+        className: "whitespace-nowrap",
+        render: (c) => (
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${
+              c.status === "active"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : c.status === "renewed"
+                ? "bg-purple-50 text-purple-700 border-purple-200"
+                : c.status === "expired"
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : "bg-amber-50 text-amber-700 border-amber-200"
+            }`}
+          >
+            {c.status_display || c.status || "Active"}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  // 3. Quotations Columns
+  const quotationColumns = useMemo(
+    () => [
+      {
+        key: "quotation_no",
+        label: "Quotation No",
+        className: "whitespace-nowrap",
+        render: (q) => (
+          <span className={`font-bold ${q.is_dropped ? "line-through text-slate-500" : "text-sky-700"}`}>
+            {q.quotation_no || `AKSN-${q.id}`}
+            {q.is_dropped && (
+              <span className="ml-1.5 px-1.5 py-0.2 bg-slate-700 text-white rounded text-[9px] font-extrabold">
+                DROPPED
+              </span>
+            )}
+          </span>
+        ),
+      },
+      {
+        key: "quotation_date",
+        label: "Date",
+        className: "whitespace-nowrap text-slate-600",
+        render: (q) => formatDt(q.quotation_date || q.created_at),
+      },
+      {
+        key: "subject",
+        label: "Subject / Purpose",
+        className: "text-slate-800 max-w-xs truncate text-left",
+        render: (q) => q.subject || "RO Water Treatment System",
+      },
+      {
+        key: "quotation_for",
+        label: "Location",
+        className: "whitespace-nowrap",
+        render: (q) => (
+          <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium">
+            {q.quotation_for || "Pune"}
+          </span>
+        ),
+      },
+      {
+        key: "grand_total",
+        label: "Grand Total",
+        className: "whitespace-nowrap text-right font-bold text-slate-900",
+        render: (q) => {
+          const val = parseFloat(q.latest_version_details?.grand_total || q.total_amount || 0);
+          return `₹${val.toLocaleString("en-IN")}`;
+        },
+      },
+      {
+        key: "status",
+        label: "Status",
+        className: "whitespace-nowrap",
+        render: (q) => (
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+              q.is_finalized
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : q.is_dropped
+                ? "bg-slate-100 text-slate-600 border-slate-200"
+                : "bg-sky-50 text-sky-700 border-sky-200"
+            }`}
+          >
+            {q.is_finalized ? "Finalized" : q.is_dropped ? "Dropped" : "Draft"}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  // 4. Invoices Columns
+  const invoiceColumns = useMemo(
+    () => [
+      {
+        key: "invoice_number",
+        label: "Invoice No",
+        className: "whitespace-nowrap font-bold text-sky-700 font-mono",
+        render: (inv) => inv.invoice_number || `INV-${inv.id}`,
+      },
+      {
+        key: "invoice_date",
+        label: "Date",
+        className: "whitespace-nowrap text-slate-600",
+        render: (inv) => formatDt(inv.invoice_date || inv.created_at),
+      },
+      {
+        key: "document_type",
+        label: "Document Type",
+        className: "whitespace-nowrap",
+        render: (inv) => {
+          const isProforma = inv.document_type === "PROFORMA";
+          return (
+            <span
+              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                isProforma
+                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                  : "bg-sky-50 text-sky-700 border-sky-200"
+              }`}
+            >
+              {isProforma ? "PROFORMA" : "TAX INVOICE"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "linked_ref",
+        label: "Linked Ref",
+        className: "whitespace-nowrap text-slate-700",
+        render: (inv) =>
+          inv.project_code ? (
+            <span className="font-mono text-sky-700">{inv.project_code}</span>
+          ) : inv.amc_contract_number ? (
+            <span className="font-mono text-purple-700">{inv.amc_contract_number}</span>
+          ) : inv.service_number ? (
+            <span className="font-mono text-emerald-700">{inv.service_number}</span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          ),
+      },
+      {
+        key: "grand_total",
+        label: "Grand Total",
+        className: "whitespace-nowrap text-right font-bold text-slate-900",
+        render: (inv) => `₹${parseFloat(inv.grand_total || 0).toLocaleString("en-IN")}`,
+      },
+      {
+        key: "status",
+        label: "Status",
+        className: "whitespace-nowrap",
+        render: (inv) => (
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+              inv.status === "PAID"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : inv.status === "PARTIALLY_PAID"
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            }`}
+          >
+            {inv.status || "UNPAID"}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  // 5. Bill of Supply Columns
+  const billOfSupplyColumns = useMemo(
+    () => [
+      {
+        key: "bill_number",
+        label: "Bill No",
+        className: "whitespace-nowrap font-bold text-sky-700 font-mono",
+        render: (b) => `#${b.bill_number || `00${b.id}`}`,
+      },
+      {
+        key: "bill_date",
+        label: "Date",
+        className: "whitespace-nowrap text-slate-600",
+        render: (b) => formatDt(b.bill_date || b.created_at),
+      },
+      {
+        key: "amc_contract_number",
+        label: "AMC Contract / Ref",
+        className: "whitespace-nowrap text-slate-700",
+        render: (b) =>
+          b.amc_contract_number ? (
+            <span className="font-mono text-purple-700">{b.amc_contract_number}</span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          ),
+      },
+      {
+        key: "bill_to_name",
+        label: "Bill To Party",
+        className: "text-slate-800 max-w-xs truncate text-left",
+        render: (b) => b.bill_to_name || customerName,
+      },
+      {
+        key: "grand_total",
+        label: "Grand Total",
+        className: "whitespace-nowrap text-right font-bold text-slate-900",
+        render: (b) => `₹${parseFloat(b.grand_total || 0).toLocaleString("en-IN")}`,
+      },
+      {
+        key: "status",
+        label: "Status",
+        className: "whitespace-nowrap",
+        render: (b) => (
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+              b.status === "PAID"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : b.status === "PARTIALLY_PAID"
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            }`}
+          >
+            {b.status || "PAID"}
+          </span>
+        ),
+      },
+    ],
+    [customerName]
+  );
+
+  // 6. Delivery Challans Columns
+  const deliveryChallanColumns = useMemo(
+    () => [
+      {
+        key: "challan_number",
+        label: "Challan No",
+        className: "whitespace-nowrap font-bold text-sky-700 font-mono",
+        render: (dc) => dc.challan_number || `DC-${dc.id}`,
+      },
+      {
+        key: "challan_date",
+        label: "Date",
+        className: "whitespace-nowrap text-slate-600",
+        render: (dc) => formatDt(dc.challan_date || dc.created_at),
+      },
+      {
+        key: "linked_ref",
+        label: "Linked Ref",
+        className: "whitespace-nowrap text-slate-700",
+        render: (dc) =>
+          dc.project_code ? (
+            <span className="font-mono text-sky-700">{dc.project_code}</span>
+          ) : dc.po_number ? (
+            <span className="font-mono text-purple-700">{dc.po_number}</span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          ),
+      },
+      {
+        key: "ship_to_address",
+        label: "Ship To Location",
+        className: "text-slate-800 max-w-xs truncate text-left",
+        render: (dc) =>
+          dc.ship_to_city ? `${dc.ship_to_city}, ${dc.ship_to_state || ""}` : dc.ship_to_address || "—",
+      },
+      {
+        key: "items_count",
+        label: "Items",
+        className: "whitespace-nowrap text-center",
+        render: (dc) => {
+          const count = dc.items?.length || 0;
+          return (
+            <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full text-[10px] font-semibold">
+              {count} {count === 1 ? "item" : "items"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "grand_total",
+        label: "Declared Value",
+        className: "whitespace-nowrap text-right font-bold text-slate-900",
+        render: (dc) => {
+          const amount = parseFloat(dc.grand_total || 0);
+          return amount > 0 ? `₹${amount.toLocaleString("en-IN")}` : "₹0.00";
+        },
+      },
+    ],
+    []
+  );
+
+  // 7. Advance Payment Receipts Columns
+  const advanceReceiptColumns = useMemo(
+    () => [
+      {
+        key: "receipt_number",
+        label: "Receipt No",
+        className: "whitespace-nowrap font-bold text-emerald-700 font-mono",
+        render: (apr) => apr.receipt_number || `APR-${apr.id}`,
+      },
+      {
+        key: "receipt_date",
+        label: "Date",
+        className: "whitespace-nowrap text-slate-600",
+        render: (apr) => formatDt(apr.receipt_date || apr.created_at),
+      },
+      {
+        key: "receipt_type",
+        label: "Source / Ref",
+        className: "whitespace-nowrap text-slate-700",
+        render: (apr) => (
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">
+              {apr.receipt_type || "PROJECT"}
+            </span>
+            {apr.project_code && <span className="font-mono text-sky-700">{apr.project_code}</span>}
+            {apr.amc_contract_number && (
+              <span className="font-mono text-purple-700">{apr.amc_contract_number}</span>
+            )}
+            {apr.service_title && (
+              <span className="font-mono text-emerald-700">{apr.service_title}</span>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "payment_mode",
+        label: "Payment Mode",
+        className: "whitespace-nowrap text-center",
+        render: (apr) => (
+          <div>
+            <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium">
+              {apr.payment_mode || "ONLINE"}
+            </span>
+            {apr.transaction_ref && (
+              <div className="text-[9px] text-slate-400 font-mono mt-0.5 truncate max-w-[120px]">
+                {apr.transaction_ref}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "amount",
+        label: "Advance Paid",
+        className: "whitespace-nowrap text-right font-bold text-emerald-700",
+        render: (apr) => `₹${parseFloat(apr.amount || 0).toLocaleString("en-IN")}`,
+      },
+      {
+        key: "balance_amount",
+        label: "Balance",
+        className: "whitespace-nowrap text-right font-medium text-slate-600",
+        render: (apr) => `₹${parseFloat(apr.balance_amount || 0).toLocaleString("en-IN")}`,
+      },
+      {
+        key: "status",
+        label: "Status",
+        className: "whitespace-nowrap text-center",
+        render: (apr) => (
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+              apr.status === "CONFIRMED"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-amber-50 text-amber-700 border-amber-200"
+            }`}
+          >
+            {apr.status || "CONFIRMED"}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  // 8. Projects Columns
+  const projectColumns = useMemo(
+    () => [
+      {
+        key: "project_code",
+        label: "Project Code",
+        className: "whitespace-nowrap font-bold text-sky-700",
+        render: (p) => p.project_code || `PRJ-${p.id}`,
+      },
+      {
+        key: "project_name",
+        label: "Project Name",
+        className: "whitespace-nowrap font-semibold text-slate-800 text-left",
+        render: (p) => p.project_name || "—",
+      },
+      {
+        key: "project_stage",
+        label: "Stage",
+        className: "whitespace-nowrap text-center",
+        render: (p) => (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-100 capitalize">
+            {p.project_stage_display || p.project_stage || "Initiation"}
+          </span>
+        ),
+      },
+      {
+        key: "priority",
+        label: "Priority",
+        className: "whitespace-nowrap text-center",
+        render: (p) => (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 capitalize">
+            {p.priority_display || p.priority || "Medium"}
+          </span>
+        ),
+      },
+      {
+        key: "expected_to_go_live",
+        label: "Go-Live",
+        className: "whitespace-nowrap text-slate-600",
+        render: (p) => formatDt(p.expected_to_go_live || p.start_date),
+      },
+      {
+        key: "project_value",
+        label: "Value",
+        className: "whitespace-nowrap text-right font-bold text-slate-900",
+        render: (p) => `₹${parseFloat(p.project_value || 0).toLocaleString("en-IN")}`,
+      },
+      {
+        key: "project_executive",
+        label: "Executive",
+        className: "whitespace-nowrap text-slate-700",
+        render: (p) => p.project_executive_details?.full_name || p.project_executive_details?.username || "—",
+      },
+    ],
+    []
+  );
+
+  // 9. Referrals Columns
+  const referralColumns = useMemo(
+    () => [
+      {
+        key: "company_name",
+        label: "Referred Lead / Company",
+        className: "whitespace-nowrap text-left",
+        render: (ref) => (
+          <div>
+            <span className="font-bold text-slate-900 block">{ref.company_name || "Unnamed"}</span>
+            <span className="text-[10px] text-slate-400">Lead #{ref.id}</span>
+          </div>
+        ),
+      },
+      {
+        key: "contact_person",
+        label: "Contact Person",
+        className: "whitespace-nowrap text-slate-700 font-medium",
+        render: (ref) => ref.contact_person || "—",
+      },
+      {
+        key: "contact",
+        label: "Phone & Email",
+        className: "whitespace-nowrap text-left",
+        render: (ref) => (
+          <div>
+            {ref.mobile_number && <span className="text-slate-800 font-medium block">{ref.mobile_number}</span>}
+            {ref.email_address && (
+              <span className="text-[10px] text-slate-400 block truncate max-w-[160px]">
+                {ref.email_address}
+              </span>
+            )}
+            {!ref.mobile_number && !ref.email_address && "—"}
+          </div>
+        ),
+      },
+      {
+        key: "enquiry_date",
+        label: "Date Referred",
+        className: "whitespace-nowrap text-slate-600",
+        render: (ref) =>
+          ref.enquiry_date ? formatDt(ref.enquiry_date) : ref.created_at ? formatDt(ref.created_at) : "—",
+      },
+      {
+        key: "pipeline_stage",
+        label: "Pipeline Stage",
+        className: "whitespace-nowrap text-center",
+        render: (ref) => (
+          <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-semibold capitalize">
+            {ref.pipeline_stage_display || ref.pipeline_stage || "Enquiry"}
+          </span>
+        ),
+      },
+      {
+        key: "status",
+        label: "Status",
+        className: "whitespace-nowrap text-center",
+        render: (ref) => (
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+              ref.status === "close_win"
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : ref.status === "close_loss"
+                ? "bg-rose-50 text-rose-700 border border-rose-200"
+                : "bg-sky-50 text-sky-700 border-sky-200"
+            }`}
+          >
+            {ref.status_display || ref.status || "Open"}
+          </span>
+        ),
+      },
+      {
+        key: "conversion",
+        label: "Conversion",
+        className: "whitespace-nowrap text-center",
+        render: (ref) => (
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              ref.is_converted ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"
+            }`}
+          >
+            {ref.is_converted ? "✓ Customer Converted" : "In Pipeline"}
+          </span>
+        ),
+      },
+      {
+        key: "points",
+        label: "Points Awarded",
+        className: "whitespace-nowrap text-center font-bold text-emerald-700",
+        render: () => "+1 Point",
+      },
+    ],
+    []
+  );
 
   return (
     <div className="w-full space-y-4 font-sans antialiased text-slate-800 pb-10 animate-fade-in text-xs">
@@ -460,7 +1243,7 @@ export default function CustomerDetailView({
         </div>
 
         {/* 4. TABS NAVIGATION HEADER */}
-        <div className="border-b border-slate-200/80 flex items-center justify-between gap-2 overflow-x-auto pt-2 scrollbar-none">
+        <div className="border-b border-slate-200/80 flex items-center justify-between gap-2 overflow-x-auto pt-2 thin-scrollbar pb-1">
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -520,6 +1303,70 @@ export default function CustomerDetailView({
               <span>Quotations</span>
               <span className="px-1.5 py-0.2 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full">
                 {quotations.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("invoices")}
+              className={`px-3.5 py-2 rounded-t-lg text-xs font-semibold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeTab === "invoices"
+                  ? "border-sky-600 text-sky-700 bg-sky-50/40"
+                  : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
+            >
+              <MdReceiptLong size={15} />
+              <span>Invoices</span>
+              <span className="px-1.5 py-0.2 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full">
+                {invoices.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("bill_of_supply")}
+              className={`px-3.5 py-2 rounded-t-lg text-xs font-semibold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeTab === "bill_of_supply"
+                  ? "border-sky-600 text-sky-700 bg-sky-50/40"
+                  : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
+            >
+              <MdReceipt size={15} />
+              <span>Bill of Supply</span>
+              <span className="px-1.5 py-0.2 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full">
+                {billsOfSupply.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("delivery_challans")}
+              className={`px-3.5 py-2 rounded-t-lg text-xs font-semibold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeTab === "delivery_challans"
+                  ? "border-sky-600 text-sky-700 bg-sky-50/40"
+                  : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
+            >
+              <MdLocalShipping size={15} />
+              <span>Delivery Challans</span>
+              <span className="px-1.5 py-0.2 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full">
+                {deliveryChallans.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("advance_receipts")}
+              className={`px-3.5 py-2 rounded-t-lg text-xs font-semibold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeTab === "advance_receipts"
+                  ? "border-sky-600 text-sky-700 bg-sky-50/40"
+                  : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
+            >
+              <MdPayment size={15} />
+              <span>Advance Receipts</span>
+              <span className="px-1.5 py-0.2 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full">
+                {advanceReceipts.length}
               </span>
             </button>
 
@@ -752,6 +1599,86 @@ export default function CustomerDetailView({
                   </div>
                 </div>
 
+                {/* Invoicing & Operations Activity */}
+                <div className="bg-slate-50/50 rounded-xl p-5 border border-slate-200/80 space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-slate-200/70 pb-1.5">
+                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Invoicing & Operations Activity
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">Quick Summary</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("invoices")}
+                      className="p-2.5 bg-white rounded-lg border border-slate-200/70 hover:border-sky-300 hover:shadow-xs transition-all text-left group cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between text-slate-400 group-hover:text-sky-600 mb-1">
+                        <span className="text-[10px] font-medium uppercase">Tax Invoices</span>
+                        <MdReceiptLong size={14} />
+                      </div>
+                      <div className="text-xs font-bold text-slate-900 group-hover:text-sky-700">
+                        ₹{totalInvoicedValue.toLocaleString("en-IN")}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                        {invoices.length} {invoices.length === 1 ? "invoice" : "invoices"}
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("bill_of_supply")}
+                      className="p-2.5 bg-white rounded-lg border border-slate-200/70 hover:border-sky-300 hover:shadow-xs transition-all text-left group cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between text-slate-400 group-hover:text-sky-600 mb-1">
+                        <span className="text-[10px] font-medium uppercase">Bill of Supply</span>
+                        <MdReceipt size={14} />
+                      </div>
+                      <div className="text-xs font-bold text-slate-900 group-hover:text-sky-700">
+                        ₹{totalBillOfSupplyValue.toLocaleString("en-IN")}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                        {billsOfSupply.length} {billsOfSupply.length === 1 ? "bill" : "bills"}
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("delivery_challans")}
+                      className="p-2.5 bg-white rounded-lg border border-slate-200/70 hover:border-sky-300 hover:shadow-xs transition-all text-left group cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between text-slate-400 group-hover:text-sky-600 mb-1">
+                        <span className="text-[10px] font-medium uppercase">Challans</span>
+                        <MdLocalShipping size={14} />
+                      </div>
+                      <div className="text-xs font-bold text-slate-900 group-hover:text-sky-700">
+                        {deliveryChallans.length} {deliveryChallans.length === 1 ? "Challan" : "Challans"}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                        Shipment & Delivery
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("advance_receipts")}
+                      className="p-2.5 bg-white rounded-lg border border-slate-200/70 hover:border-emerald-300 hover:shadow-xs transition-all text-left group cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between text-slate-400 group-hover:text-emerald-600 mb-1">
+                        <span className="text-[10px] font-medium uppercase">Advance Recd</span>
+                        <MdPayment size={14} />
+                      </div>
+                      <div className="text-xs font-bold text-emerald-700">
+                        ₹{totalAdvanceReceived.toLocaleString("en-IN")}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                        {advanceReceipts.length} {advanceReceipts.length === 1 ? "receipt" : "receipts"}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Card C: Billing Address */}
                 <div className="bg-slate-50/50 rounded-xl p-5 border border-slate-200/80 space-y-2.5">
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200/70 pb-1.5">
@@ -794,109 +1721,27 @@ export default function CustomerDetailView({
               </button>
             </div>
 
-            {loadingRelated ? (
-              <div className="py-12 text-center text-xs text-slate-400">Loading service visits...</div>
-            ) : services.length === 0 ? (
-              <div className="bg-slate-50/60 rounded-xl border border-dashed border-slate-200 p-8 text-center space-y-2">
-                <MdOutlineBuild className="mx-auto text-slate-300 text-3xl" />
-                <p className="text-xs font-semibold text-slate-700">No services recorded yet</p>
-                <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                  No breakdown repairs or scheduled visits have been logged for this customer.
-                </p>
+            <TableView
+              columns={serviceColumns}
+              rows={getTabPagedRows(services, "services").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(services, "services").page}
+              totalPages={getTabPagedRows(services, "services").totalPages}
+              onPageChange={(p) => handleTabPageChange("services", p)}
+              pageSize={10}
+              actions={(srv) => (
                 <button
                   type="button"
-                  onClick={() => navigate(`/services?customerId=${customer.id}`)}
-                  className="mt-2 px-3 py-1.5 bg-sky-600 text-white text-xs font-semibold rounded-lg hover:bg-sky-700 cursor-pointer shadow-2xs"
+                  onClick={() => navigate("/amc-services", { state: { viewingService: srv, serviceId: srv.id } })}
+                  className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
+                  title="View Full Service Details"
                 >
-                  Create First Service
+                  <MdOutlineRemoveRedEye size={13} />
+                  <span>View</span>
                 </button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200/80 shadow-2xs">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-slate-50/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="py-2.5 px-3">Service No</th>
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Type</th>
-                      <th className="py-2.5 px-3">Category</th>
-                      <th className="py-2.5 px-3">Technician</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-right">Cost</th>
-                      <th className="py-2.5 px-3 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {services.map((srv) => {
-                      const techs = Array.isArray(srv.technicians_details) ? srv.technicians_details : [];
-                      const techName = techs[0]
-                        ? `${techs[0].first_name || ""} ${techs[0].last_name || ""}`.trim() || techs[0].username
-                        : srv.service_engineer_details?.full_name || "Unassigned";
-
-                      return (
-                        <tr key={srv.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="py-2.5 px-3 font-bold text-sky-700 whitespace-nowrap">
-                            {srv.service_number || `#SRV-${srv.id}`}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
-                            {formatDt(srv.service_date)}
-                          </td>
-                          <td className="py-2.5 px-3 font-medium text-slate-800 whitespace-nowrap capitalize">
-                            {srv.service_type_display || srv.service_type || "Routine"}
-                          </td>
-                          <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                                srv.service_category === "amc_service"
-                                  ? "bg-purple-50 text-purple-700 border-purple-200"
-                                  : "bg-sky-50 text-sky-700 border-sky-200"
-                              }`}
-                            >
-                              {srv.service_category === "amc_service" ? "AMC Service" : "On-Demand"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap">
-                            <span className="flex items-center gap-1 font-medium">
-                              <MdEngineering size={12} className="text-slate-400" />
-                              {techName}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${
-                                srv.status === "completed"
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : srv.status === "in_progress"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : srv.status === "cancelled"
-                                  ? "bg-rose-50 text-rose-700 border-rose-200"
-                                  : "bg-sky-50 text-sky-700 border-sky-200"
-                              }`}
-                            >
-                              {srv.status_display || srv.status || "Scheduled"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-semibold text-slate-900 whitespace-nowrap">
-                            ₹{parseFloat(srv.service_cost || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => navigate("/amc-services", { state: { viewingService: srv, serviceId: srv.id } })}
-                              className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
-                              title="View Full Service Details"
-                            >
-                              <MdOutlineRemoveRedEye size={13} />
-                              <span>View</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              )}
+              emptyMessage="No service visits recorded for this customer yet."
+            />
           </div>
         )}
 
@@ -923,92 +1768,27 @@ export default function CustomerDetailView({
               </button>
             </div>
 
-            {loadingRelated ? (
-              <div className="py-12 text-center text-xs text-slate-400">Loading AMC contracts...</div>
-            ) : amcContracts.length === 0 ? (
-              <div className="bg-slate-50/60 rounded-xl border border-dashed border-slate-200 p-8 text-center space-y-2">
-                <MdDescription className="mx-auto text-slate-300 text-3xl" />
-                <p className="text-xs font-semibold text-slate-700">No AMC contracts found</p>
-                <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                  This customer currently has no active or past Annual Maintenance Contracts.
-                </p>
+            <TableView
+              columns={amcColumns}
+              rows={getTabPagedRows(amcContracts, "amc").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(amcContracts, "amc").page}
+              totalPages={getTabPagedRows(amcContracts, "amc").totalPages}
+              onPageChange={(p) => handleTabPageChange("amc", p)}
+              pageSize={10}
+              actions={(c) => (
                 <button
                   type="button"
-                  onClick={() => navigate(`/amc?customerId=${customer.id}`)}
-                  className="mt-2 px-3 py-1.5 bg-sky-600 text-white text-xs font-semibold rounded-lg hover:bg-sky-700 cursor-pointer shadow-2xs"
+                  onClick={() => navigate(`/amc?contractId=${c.id}`)}
+                  className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
+                  title="View Full AMC Details"
                 >
-                  Create AMC Contract
+                  <MdOutlineRemoveRedEye size={13} />
+                  <span>View</span>
                 </button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200/80 shadow-2xs">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-slate-50/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="py-2.5 px-3">Contract ID</th>
-                      <th className="py-2.5 px-3">Period (Start — End)</th>
-                      <th className="py-2.5 px-3 text-right">Annual Value</th>
-                      <th className="py-2.5 px-3">Frequency & Visits</th>
-                      <th className="py-2.5 px-3">Coordinator</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {amcContracts.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-2.5 px-3 font-bold text-sky-700 whitespace-nowrap">
-                          {c.contract_id || `#AMC-${c.id}`}
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap">
-                          <span className="font-medium text-slate-800">{formatDt(c.start_date)}</span>
-                          <span className="text-slate-400 mx-1">to</span>
-                          <span className="font-medium text-slate-800">{formatDt(c.end_date)}</span>
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-emerald-700 whitespace-nowrap">
-                          ₹{parseFloat(c.annual_value || 0).toLocaleString("en-IN")}
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap capitalize">
-                          <span className="font-semibold block">{c.service_frequency_display || c.service_frequency || "Quarterly"}</span>
-                          <span className="text-[10px] text-slate-500 block">
-                            ({c.no_of_visits !== undefined && c.no_of_visits !== null ? c.no_of_visits : 4} visits)
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap">
-                          {c.support_coordinator_details?.full_name || c.support_coordinator_details?.username || "—"}
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span
-                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${
-                              c.status === "active"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : c.status === "renewed"
-                                ? "bg-purple-50 text-purple-700 border-purple-200"
-                                : c.status === "expired"
-                                ? "bg-rose-50 text-rose-700 border-rose-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200"
-                            }`}
-                          >
-                            {c.status_display || c.status || "Active"}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/amc?contractId=${c.id}`)}
-                            className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
-                            title="View Full AMC Details"
-                          >
-                            <MdOutlineRemoveRedEye size={13} />
-                            <span>View</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              )}
+              emptyMessage="No AMC contracts found for this customer."
+            />
           </div>
         )}
 
@@ -1035,104 +1815,238 @@ export default function CustomerDetailView({
               </button>
             </div>
 
-            {loadingRelated ? (
-              <div className="py-12 text-center text-xs text-slate-400">Loading quotations...</div>
-            ) : quotations.length === 0 ? (
-              <div className="bg-slate-50/60 rounded-xl border border-dashed border-slate-200 p-8 text-center space-y-2">
-                <MdReceiptLong className="mx-auto text-slate-300 text-3xl" />
-                <p className="text-xs font-semibold text-slate-700">No quotations found</p>
-                <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                  No commercial proposals have been generated for this customer yet.
-                </p>
+            <TableView
+              columns={quotationColumns}
+              rows={getTabPagedRows(quotations, "quotations").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(quotations, "quotations").page}
+              totalPages={getTabPagedRows(quotations, "quotations").totalPages}
+              onPageChange={(p) => handleTabPageChange("quotations", p)}
+              pageSize={10}
+              actions={(q) => (
                 <button
                   type="button"
-                  onClick={() => navigate(`/quotations?customerId=${customer.id}`)}
-                  className="mt-2 px-3 py-1.5 bg-sky-600 text-white text-xs font-semibold rounded-lg hover:bg-sky-700 cursor-pointer shadow-2xs"
+                  onClick={() => navigate(`/quotations?id=${q.id}`)}
+                  className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
+                  title="View Quotation"
                 >
-                  Create Quotation
+                  <MdOutlineRemoveRedEye size={13} />
+                  <span>View</span>
                 </button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200/80 shadow-2xs">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-slate-50/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="py-2.5 px-3">Quotation No</th>
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Subject / Purpose</th>
-                      <th className="py-2.5 px-3">Location</th>
-                      <th className="py-2.5 px-3 text-right">Grand Total</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {quotations.map((q) => {
-                      const quoteAmount = parseFloat(
-                        q.latest_version_details?.grand_total || q.total_amount || 0
-                      );
+              )}
+              emptyMessage="No commercial proposals or quotations generated for this customer yet."
+            />
+          </div>
+        )}
 
-                      return (
-                        <tr key={q.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span
-                              className={`font-bold ${
-                                q.is_dropped ? "line-through text-slate-500" : "text-sky-700"
-                              }`}
-                            >
-                              {q.quotation_no || `AKSN-${q.id}`}
-                            </span>
-                            {q.is_dropped && (
-                              <span className="ml-1.5 px-1.5 py-0.2 bg-slate-700 text-white rounded text-[9px] font-extrabold">
-                                DROPPED
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
-                            {formatDt(q.quotation_date || q.created_at)}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-800 max-w-xs truncate" title={q.subject || ""}>
-                            {q.subject || "RO Water Treatment System"}
-                          </td>
-                          <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium">
-                              {q.quotation_for || "Pune"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
-                            ₹{quoteAmount.toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                                q.is_finalized
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : q.is_dropped
-                                  ? "bg-slate-100 text-slate-600 border-slate-200"
-                                  : "bg-sky-50 text-sky-700 border-sky-200"
-                              }`}
-                            >
-                              {q.is_finalized ? "Finalized" : q.is_dropped ? "Dropped" : "Draft"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/quotations?id=${q.id}`)}
-                              className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
-                              title="View Quotation"
-                            >
-                              <MdOutlineRemoveRedEye size={13} />
-                              <span>View</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+        {/* TAB: INVOICES */}
+        {activeTab === "invoices" && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1 border-b border-slate-100">
+              <div>
+                <h2 className="text-xs sm:text-[13px] font-bold text-slate-900 leading-tight">
+                  Tax Invoices & Proforma Invoices
+                </h2>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Official GST tax invoices and proforma billing generated for {customerName}
+                </p>
               </div>
-            )}
+
+              <button
+                type="button"
+                onClick={() => navigate(`/invoices?customerId=${customer.id}`)}
+                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-semibold rounded-lg transition-colors shadow-2xs shadow-sky-500/10 flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+              >
+                <MdAdd size={15} />
+                <span>Create Invoice</span>
+              </button>
+            </div>
+
+            <TableView
+              columns={invoiceColumns}
+              rows={getTabPagedRows(invoices, "invoices").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(invoices, "invoices").page}
+              totalPages={getTabPagedRows(invoices, "invoices").totalPages}
+              onPageChange={(p) => handleTabPageChange("invoices", p)}
+              pageSize={10}
+              actions={(inv) => {
+                const isProforma = inv.document_type === "PROFORMA";
+                return (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleViewPDF(
+                        `${BASE_API}/invoice/invoices/${inv.id}/pdf/?disposition=inline`,
+                        isProforma ? "Proforma Invoice" : "Tax Invoice"
+                      )
+                    }
+                    className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
+                    title="View Invoice PDF"
+                  >
+                    <MdOutlineRemoveRedEye size={13} />
+                    <span>View PDF</span>
+                  </button>
+                );
+              }}
+              emptyMessage="No tax or proforma invoices generated for this customer yet."
+            />
+          </div>
+        )}
+
+        {/* TAB: BILL OF SUPPLY */}
+        {activeTab === "bill_of_supply" && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1 border-b border-slate-100">
+              <div>
+                <h2 className="text-xs sm:text-[13px] font-bold text-slate-900 leading-tight">
+                  Bill of Supply
+                </h2>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Official non-GST Bills of Supply for AMC contracts, renewals & services for {customerName}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/bill-of-supply?customerId=${customer.id}`)}
+                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-semibold rounded-lg transition-colors shadow-2xs shadow-sky-500/10 flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+              >
+                <MdAdd size={15} />
+                <span>Create Bill of Supply</span>
+              </button>
+            </div>
+
+            <TableView
+              columns={billOfSupplyColumns}
+              rows={getTabPagedRows(billsOfSupply, "bill_of_supply").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(billsOfSupply, "bill_of_supply").page}
+              totalPages={getTabPagedRows(billsOfSupply, "bill_of_supply").totalPages}
+              onPageChange={(p) => handleTabPageChange("bill_of_supply", p)}
+              pageSize={10}
+              actions={(b) => (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleViewPDF(
+                      `${BASE_API}/invoice/bill-of-supply/${b.id}/pdf/?disposition=inline`,
+                      "Bill of Supply"
+                    )
+                  }
+                  className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
+                  title="View Bill of Supply PDF"
+                >
+                  <MdOutlineRemoveRedEye size={13} />
+                  <span>View PDF</span>
+                </button>
+              )}
+              emptyMessage="No bills of supply generated for this customer yet."
+            />
+          </div>
+        )}
+
+        {/* TAB: DELIVERY CHALLANS */}
+        {activeTab === "delivery_challans" && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1 border-b border-slate-100">
+              <div>
+                <h2 className="text-xs sm:text-[13px] font-bold text-slate-900 leading-tight">
+                  Delivery Challans
+                </h2>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Goods dispatch notes, equipment delivery challans & proof of dispatch for {customerName}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/delivery-challans?customerId=${customer.id}`)}
+                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-semibold rounded-lg transition-colors shadow-2xs shadow-sky-500/10 flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+              >
+                <MdAdd size={15} />
+                <span>Create Delivery Challan</span>
+              </button>
+            </div>
+
+            <TableView
+              columns={deliveryChallanColumns}
+              rows={getTabPagedRows(deliveryChallans, "delivery_challans").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(deliveryChallans, "delivery_challans").page}
+              totalPages={getTabPagedRows(deliveryChallans, "delivery_challans").totalPages}
+              onPageChange={(p) => handleTabPageChange("delivery_challans", p)}
+              pageSize={10}
+              actions={(dc) => (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleViewPDF(
+                      `${BASE_API}/invoice/delivery-challans/${dc.id}/pdf/?disposition=inline`,
+                      "Delivery Challan"
+                    )
+                  }
+                  className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
+                  title="View Delivery Challan PDF"
+                >
+                  <MdOutlineRemoveRedEye size={13} />
+                  <span>View PDF</span>
+                </button>
+              )}
+              emptyMessage="No delivery challans recorded for this customer yet."
+            />
+          </div>
+        )}
+
+        {/* TAB: ADVANCE PAYMENT RECEIPTS */}
+        {activeTab === "advance_receipts" && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1 border-b border-slate-100">
+              <div>
+                <h2 className="text-xs sm:text-[13px] font-bold text-slate-900 leading-tight">
+                  Advance Payment Receipts
+                </h2>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Advance payment acknowledgements & booking deposits received for {customerName}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/advance-receipts?customerId=${customer.id}`)}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-lg transition-colors shadow-2xs shadow-emerald-500/10 flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+              >
+                <MdAdd size={15} />
+                <span>Add Advance Receipt</span>
+              </button>
+            </div>
+
+            <TableView
+              columns={advanceReceiptColumns}
+              rows={getTabPagedRows(advanceReceipts, "advance_receipts").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(advanceReceipts, "advance_receipts").page}
+              totalPages={getTabPagedRows(advanceReceipts, "advance_receipts").totalPages}
+              onPageChange={(p) => handleTabPageChange("advance_receipts", p)}
+              pageSize={10}
+              actions={(apr) => (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleViewPDF(
+                      `${BASE_API}/invoice/advance-receipts/${apr.id}/pdf/?disposition=inline`,
+                      "Advance Payment Receipt"
+                    )
+                  }
+                  className="px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer inline-flex items-center gap-1"
+                  title="View Advance Receipt PDF"
+                >
+                  <MdOutlineRemoveRedEye size={13} />
+                  <span>View PDF</span>
+                </button>
+              )}
+              emptyMessage="No advance payment receipts recorded for this customer yet."
+            />
           </div>
         )}
 
@@ -1159,83 +2073,27 @@ export default function CustomerDetailView({
               </button>
             </div>
 
-            {loadingRelated ? (
-              <div className="py-12 text-center text-xs text-slate-400">Loading projects...</div>
-            ) : projects.length === 0 ? (
-              <div className="bg-slate-50/60 rounded-xl border border-dashed border-slate-200 p-8 text-center space-y-2">
-                <MdEngineering className="mx-auto text-slate-300 text-3xl" />
-                <p className="text-xs font-semibold text-slate-700">No projects found</p>
-                <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                  No installation or execution projects are currently linked to this customer account.
-                </p>
+            <TableView
+              columns={projectColumns}
+              rows={getTabPagedRows(projects, "projects").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(projects, "projects").page}
+              totalPages={getTabPagedRows(projects, "projects").totalPages}
+              onPageChange={(p) => handleTabPageChange("projects", p)}
+              pageSize={10}
+              actions={(p) => (
                 <button
                   type="button"
-                  onClick={() => navigate(`/projects?customerId=${customer.id}`)}
-                  className="mt-2 px-3 py-1.5 bg-sky-600 text-white text-xs font-semibold rounded-lg hover:bg-sky-700 cursor-pointer shadow-2xs"
+                  onClick={() => navigate(`/projects?projectId=${p.id}`)}
+                  className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
+                  title="View Full Project Details"
                 >
-                  Create Project
+                  <MdOutlineRemoveRedEye size={13} />
+                  <span>View</span>
                 </button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200/80 shadow-2xs">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-slate-50/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="py-2.5 px-3">Project Code</th>
-                      <th className="py-2.5 px-3">Project Name</th>
-                      <th className="py-2.5 px-3">Stage</th>
-                      <th className="py-2.5 px-3">Priority</th>
-                      <th className="py-2.5 px-3">Go-Live</th>
-                      <th className="py-2.5 px-3 text-right">Value</th>
-                      <th className="py-2.5 px-3">Executive</th>
-                      <th className="py-2.5 px-3 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {projects.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-2.5 px-3 font-bold text-sky-700 whitespace-nowrap">
-                          {p.project_code || `PRJ-${p.id}`}
-                        </td>
-                        <td className="py-2.5 px-3 font-semibold text-slate-800 whitespace-nowrap">
-                          {p.project_name || "—"}
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-100 capitalize">
-                            {p.project_stage_display || p.project_stage || "Initiation"}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 capitalize">
-                            {p.priority_display || p.priority || "Medium"}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
-                          {formatDt(p.expected_to_go_live || p.start_date)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
-                          ₹{parseFloat(p.project_value || 0).toLocaleString("en-IN")}
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap">
-                          {p.project_executive_details?.full_name || p.project_executive_details?.username || "—"}
-                        </td>
-                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/projects?projectId=${p.id}`)}
-                            className="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200 cursor-pointer inline-flex items-center gap-1"
-                            title="View Full Project Details"
-                          >
-                            <MdOutlineRemoveRedEye size={13} />
-                            <span>View</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              )}
+              emptyMessage="No execution projects linked to this customer account."
+            />
           </div>
         )}
 
@@ -1309,99 +2167,16 @@ export default function CustomerDetailView({
               </div>
             </div>
 
-            {loadingRelated ? (
-              <div className="py-12 text-center text-xs text-slate-400">Loading referral records...</div>
-            ) : referrals.length === 0 ? (
-              <div className="bg-slate-50/60 rounded-xl border border-dashed border-slate-200 p-8 text-center space-y-2">
-                <MdCardGiftcard className="mx-auto text-slate-300 text-3xl" />
-                <p className="text-xs font-semibold text-slate-700">No Referrals Recorded Yet</p>
-                <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                  When adding a new lead with Lead Source set to "Referral", select {customerName} to award 1 referral point.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200/80 shadow-2xs">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-slate-50/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="py-2.5 px-3">Referred Lead / Company</th>
-                      <th className="py-2.5 px-3">Contact Person</th>
-                      <th className="py-2.5 px-3">Phone & Email</th>
-                      <th className="py-2.5 px-3">Date Referred</th>
-                      <th className="py-2.5 px-3">Pipeline Stage</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-center">Conversion</th>
-                      <th className="py-2.5 px-3 text-center">Points Awarded</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {referrals.map((ref) => (
-                      <tr key={ref.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="font-bold text-slate-900 block">
-                            {ref.company_name || "Unnamed"}
-                          </span>
-                          <span className="text-[10px] text-slate-400">Lead #{ref.id}</span>
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap text-slate-700 font-medium">
-                          {ref.contact_person || "—"}
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          {ref.mobile_number && (
-                            <span className="text-slate-800 font-medium block">
-                              {ref.mobile_number}
-                            </span>
-                          )}
-                          {ref.email_address && (
-                            <span className="text-[10px] text-slate-400 block truncate max-w-[160px]">
-                              {ref.email_address}
-                            </span>
-                          )}
-                          {!ref.mobile_number && !ref.email_address && "—"}
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap text-slate-600">
-                          {ref.enquiry_date ? formatDt(ref.enquiry_date) : ref.created_at ? formatDt(ref.created_at) : "—"}
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                            {ref.pipeline_stage_display || ref.pipeline_stage || "New Lead"}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                              ref.status === "close_win"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : ref.status === "close_loss"
-                                ? "bg-red-50 text-red-700 border border-red-200"
-                                : "bg-sky-50 text-sky-700 border border-sky-200"
-                            }`}
-                          >
-                            {ref.status_display || ref.status || "Open"}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap text-center">
-                          {ref.is_converted ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">
-                              <MdCheckCircle size={12} /> Converted
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded-full">
-                              Lead Only
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 border border-emerald-300 text-emerald-700 font-bold text-xs rounded-full shadow-2xs">
-                            <MdCardGiftcard size={13} /> +1 Pt
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <TableView
+              columns={referralColumns}
+              rows={getTabPagedRows(referrals, "referrals").rows}
+              loading={loadingRelated}
+              page={getTabPagedRows(referrals, "referrals").page}
+              totalPages={getTabPagedRows(referrals, "referrals").totalPages}
+              onPageChange={(p) => handleTabPageChange("referrals", p)}
+              pageSize={10}
+              emptyMessage="No referrals recorded yet for this customer."
+            />
           </div>
         )}
       </div>

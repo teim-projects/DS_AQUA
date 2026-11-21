@@ -43,6 +43,9 @@ import BillingDetailsList from "./components/billing/BillingDetailsList";
 import BillingDetailsForm from "./components/billing/BillingDetailsForm";
 import InvoiceManagement from "./pages/InvoiceManagement";
 import InvoiceFormView from "./components/invoice/InvoiceFormView";
+import BillOfSupplyManagement from "./pages/BillOfSupplyManagement";
+import DeliveryChallanManagement from "./pages/DeliveryChallanManagement";
+import AdvancePaymentReceiptManagement from "./pages/AdvancePaymentReceiptManagement";
 import { useUserRole } from "./hooks/useAuth";
 import { useTechnicianLocationTracker } from "./hooks/useTechnicianLocationTracker";
 import { getBaseApiUrl } from "./utils/apiConfig";
@@ -274,6 +277,16 @@ function AppRoutes() {
       />
       <Route path="/quotation" element={<Navigate to="/quotations" replace />} />
 
+      {/* Advance Payment Receipt Routes */}
+      <Route
+        path="/advance-receipts"
+        element={
+          <ModuleProtectedRoute module="invoices">
+            <AdvancePaymentReceiptManagement />
+          </ModuleProtectedRoute>
+        }
+      />
+
       {/* Invoice & Billing Routes */}
       <Route
         path="/invoices"
@@ -300,6 +313,26 @@ function AppRoutes() {
         }
       />
       <Route path="/invoice" element={<Navigate to="/invoices" replace />} />
+
+      {/* Bill of Supply (AMC) Routes */}
+      <Route
+        path="/bill-of-supply"
+        element={
+          <ModuleProtectedRoute module="invoices">
+            <BillOfSupplyManagement />
+          </ModuleProtectedRoute>
+        }
+      />
+
+      {/* Delivery Challan Routes */}
+      <Route
+        path="/delivery-challan"
+        element={
+          <ModuleProtectedRoute module="invoices">
+            <DeliveryChallanManagement />
+          </ModuleProtectedRoute>
+        }
+      />
 
       {/* Product Routes */}
       <Route

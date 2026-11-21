@@ -730,36 +730,37 @@ export default function AMCServices() {
           baseApi={BASE_API}
         />
 
-        {/* ADVANCED FILTER DRAWER */}
+        {/* FILTER DRAWER - PORTAL TO BODY PREVENTS LAYOUT PUSH AND WHITE BOTTOM STRIP */}
         {typeof document !== "undefined" &&
           createPortal(
             <>
               {isFilterOpen && (
                 <div
-                  className="fixed inset-0 bg-slate-900/40 z-9998 transition-opacity duration-300 backdrop-blur-2xs"
+                  className="fixed inset-0 w-screen h-screen bg-black/40 z-[9999]"
                   onClick={() => setIsFilterOpen(false)}
                 />
               )}
+
               <div
-                className={`fixed top-0 right-0 h-full w-full max-w-sm sm:max-w-md bg-white shadow-2xl z-9999 transform transition-transform duration-300 ease-in-out flex flex-col ${
+                className={`fixed top-0 right-0 h-screen w-full max-w-[380px] sm:w-[380px] bg-white shadow-2xl z-[10000] flex flex-col transition-transform duration-300 ease-in-out ${
                   isFilterOpen ? "translate-x-0" : "translate-x-full"
                 }`}
               >
-                <div className="flex items-center justify-between p-4 border-b border-slate-100">
-                  <h3 className="text-base font-bold text-slate-900">Filter AMC Services</h3>
+                <div className="flex items-center justify-between p-5 border-b border-slate-200 flex-shrink-0">
+                  <h3 className="text-lg font-bold text-slate-900">Filters</h3>
                   <button
                     onClick={() => setIsFilterOpen(false)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                    className="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 cursor-pointer"
                   >
-                    <RxCross2 size={18} />
+                    ×
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="p-5 overflow-y-auto flex-1">
                   <AdvancedTableFilter
                     columns={columns}
                     data={allRows}
                     onFilter={setFilteredData}
-                    onClose={() => setIsFilterOpen(false)}
+                    setItemsPerPage={setItemsPerPage}
                   />
                 </div>
               </div>
