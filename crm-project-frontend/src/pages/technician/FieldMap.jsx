@@ -61,6 +61,7 @@ export default function FieldMap() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showRoute, setShowRoute] = useState(true);
+  const [mobileViewMode, setMobileViewMode] = useState("list"); // Default to "list" on phone so stops are seen first
 
   // Data
   const [loading, setLoading] = useState(true);
@@ -390,6 +391,25 @@ export default function FieldMap() {
     }
   }, [leafletReady]);
 
+  // Invalidate map size and fit bounds when switching to mobile "map" mode
+  useEffect(() => {
+    if (mobileViewMode === "map" && mapInstanceRef.current) {
+      const timer = setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+          if (pinnedSites.length > 0 && window.L) {
+            const bounds = window.L.latLngBounds();
+            pinnedSites.forEach((s) => bounds.extend([Number(s.latitude), Number(s.longitude)]));
+            if (bounds.isValid()) {
+              mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+            }
+          }
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [mobileViewMode, pinnedSites]);
+
   // Update Markers & Polylines whenever pinnedSites, selectedSiteId, showRoute change
   useEffect(() => {
     if (!leafletReady || !mapInstanceRef.current || !markersGroupRef.current) return;
@@ -686,27 +706,33 @@ export default function FieldMap() {
     }
   }, [leafletReady, mapData.live_technicians, pinnedSites, isTechnician, userInfo]);
 
-  // Focus site on map
+  // Focus site on map (automatically switches to map view on mobile)
   const handleFocusSiteOnMap = (site) => {
     setSelectedSiteId(site.id);
+    setMobileViewMode("map");
     if (!site.has_coordinates || !mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
-    map.flyTo([Number(site.latitude), Number(site.longitude)], 15, {
-      duration: 1.2,
-    });
 
-    // Open popup
-    if (markersGroupRef.current) {
-      markersGroupRef.current.eachLayer((layer) => {
-        const latLng = layer.getLatLng();
-        if (
-          Math.abs(latLng.lat - Number(site.latitude)) < 0.0001 &&
-          Math.abs(latLng.lng - Number(site.longitude)) < 0.0001
-        ) {
-          layer.openPopup();
+    setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+        mapInstanceRef.current.flyTo([Number(site.latitude), Number(site.longitude)], 15, {
+          duration: 1.2,
+        });
+
+        // Open popup
+        if (markersGroupRef.current) {
+          markersGroupRef.current.eachLayer((layer) => {
+            const latLng = layer.getLatLng();
+            if (
+              Math.abs(latLng.lat - Number(site.latitude)) < 0.0001 &&
+              Math.abs(latLng.lng - Number(site.longitude)) < 0.0001
+            ) {
+              layer.openPopup();
+            }
+          });
         }
-      });
-    }
+      }
+    }, 120);
   };
 
   // Request Technician's live GPS location
@@ -807,7 +833,7 @@ export default function FieldMap() {
 
   return (
     <Base title="">
-      <div className="w-full space-y-4 font-sans antialiased text-slate-800 pt-1 sm:pt-2 px-1">
+      <div className="w-full max-w-full min-w-0 space-y-3 sm:space-y-4 font-sans antialiased text-slate-800 pt-1 sm:pt-2 px-0 sm:px-1 overflow-x-hidden">
         {/* Toast Notification */}
         {toastMessage && (
           <div className="fixed top-20 right-6 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 border border-emerald-400 text-sm font-semibold animate-bounce">
@@ -817,11 +843,11 @@ export default function FieldMap() {
         )}
 
         {/* HEADER BLOCK WITH SKY VERTICAL ACCENT LINE (Exact match to other pages) */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1 pt-1">
-          <div className="flex items-center gap-3">
-            <span className="w-1.5 h-10 bg-sky-600 rounded-full block"></span>
-            <div>
-              <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1 pt-1 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="w-1.5 h-10 bg-sky-600 rounded-full block shrink-0"></span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-tight">
                   Field Route Map
                 </h1>
@@ -829,7 +855,7 @@ export default function FieldMap() {
                   {formatDisplayDate(selectedDate)}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5 truncate">
                 {loading
                   ? "Synchronizing daily field sites..."
                   : `${mapData.sites.length} customer site visits scheduled strictly for this date`}
@@ -838,9 +864,9 @@ export default function FieldMap() {
           </div>
 
           {/* Action Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5 max-w-full">
             {/* Quick Shift buttons */}
-            <div className="inline-flex items-center bg-white rounded-lg border border-slate-200 p-0.5 shadow-2xs">
+            <div className="inline-flex items-center bg-white rounded-lg border border-slate-200 p-0.5 shadow-2xs shrink-0">
               <button
                 onClick={() => shiftDate(-1)}
                 className="p-1 hover:bg-slate-100 text-slate-600 rounded cursor-pointer transition"
@@ -851,7 +877,7 @@ export default function FieldMap() {
 
               <button
                 onClick={() => setSelectedDate(getTodayStr())}
-                className={`px-2.5 py-1 text-xs font-semibold rounded cursor-pointer transition ${
+                className={`px-2 py-1 text-xs font-semibold rounded cursor-pointer transition ${
                   isTodaySelected
                     ? "bg-sky-600 text-white shadow-2xs"
                     : "text-slate-700 hover:bg-slate-100"
@@ -870,12 +896,12 @@ export default function FieldMap() {
             </div>
 
             {/* Date Input */}
-            <div className="relative flex items-center">
+            <div className="relative flex items-center shrink-0">
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                className="px-2 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 max-w-[130px] sm:max-w-none"
               />
             </div>
 
@@ -884,7 +910,7 @@ export default function FieldMap() {
               <select
                 value={selectedTechnicianId}
                 onChange={(e) => setSelectedTechnicianId(e.target.value)}
-                className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                className="px-2 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 max-w-[135px] sm:max-w-xs truncate shrink-0"
               >
                 <option value="all">All Technicians ({mapData.all_technicians?.length || 0})</option>
                 {(mapData.all_technicians || []).map((tech) => (
@@ -895,10 +921,35 @@ export default function FieldMap() {
               </select>
             )}
 
+            {/* Mobile View Toggle Button */}
+            <button
+              onClick={() => {
+                const next = mobileViewMode === "map" ? "list" : "map";
+                setMobileViewMode(next);
+                if (next === "map") {
+                  setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
+                }
+              }}
+              className="lg:hidden px-2.5 py-1.5 text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white rounded-lg shadow-2xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+              title="Toggle Map / Stops List"
+            >
+              {mobileViewMode === "map" ? (
+                <>
+                  <MdRoute className="text-sm" />
+                  <span>Stops ({filteredSites.length})</span>
+                </>
+              ) : (
+                <>
+                  <MdLocationOn className="text-sm" />
+                  <span>Show Map</span>
+                </>
+              )}
+            </button>
+
             {/* Switch to Work Desk */}
             <button
               onClick={() => navigate("/technician/work-desk")}
-              className="px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
+              className="px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <MdEngineering className="text-slate-500 text-sm" />
               <span>Work Desk</span>
@@ -908,7 +959,7 @@ export default function FieldMap() {
             <button
               onClick={() => fetchFieldMapData(false)}
               disabled={loading || refreshing}
-              className="p-1.5 bg-white border border-slate-200 text-slate-600 hover:text-sky-600 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+              className="p-1.5 bg-white border border-slate-200 text-slate-600 hover:text-sky-600 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer shrink-0"
               title="Refresh Map"
             >
               <MdRefresh className={`text-base ${refreshing || loading ? "animate-spin text-sky-600" : ""}`} />
@@ -1021,20 +1072,70 @@ export default function FieldMap() {
           </div>
         </div>
 
+        {/* Mobile Tab Switcher */}
+        <div className="lg:hidden flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 w-full max-w-full min-w-0">
+          <button
+            type="button"
+            onClick={() => {
+              setMobileViewMode("map");
+              setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
+            }}
+            className={`flex-1 py-2 px-2.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer min-w-0 ${
+              mobileViewMode === "map"
+                ? "bg-white text-sky-700 shadow-xs border border-slate-200/60"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <MdLocationOn className="text-base text-sky-600 shrink-0" />
+            <span className="truncate">Map View</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
+                mobileViewMode === "map" ? "bg-sky-100 text-sky-800" : "bg-slate-200 text-slate-700"
+              }`}
+            >
+              {pinnedSites.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMobileViewMode("list")}
+            className={`flex-1 py-2 px-2.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer min-w-0 ${
+              mobileViewMode === "list"
+                ? "bg-white text-sky-700 shadow-xs border border-slate-200/60"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <MdRoute className="text-base text-sky-600 shrink-0" />
+            <span className="truncate">Stops List</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
+                mobileViewMode === "list" ? "bg-sky-100 text-sky-800" : "bg-slate-200 text-slate-700"
+              }`}
+            >
+              {filteredSites.length}
+            </span>
+          </button>
+        </div>
+
         {/* MAIN SPLIT CARD: Left Site List & Right Interactive Map */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col lg:flex-row h-[720px] min-h-[580px]">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col lg:flex-row h-[580px] sm:h-[640px] lg:h-[720px] w-full max-w-full min-w-0">
           {/* Left Panel: Site Cards List */}
-          <div className="w-full lg:w-[420px] border-r border-slate-200/80 bg-slate-50/50 flex flex-col shrink-0 overflow-hidden">
+          <div
+            className={`w-full max-w-full min-w-0 lg:w-[420px] border-r border-slate-200/80 bg-slate-50/50 flex-col overflow-hidden ${
+              mobileViewMode === "list" ? "flex flex-1 h-full" : "hidden lg:flex"
+            }`}
+          >
             {/* Search & Status Filters */}
-            <div className="p-3 bg-white border-b border-slate-200/80 space-y-2 shrink-0">
-              <div className="relative">
+            <div className="p-2.5 sm:p-3 bg-white border-b border-slate-200/80 space-y-2 shrink-0 w-full max-w-full min-w-0">
+              <div className="relative w-full min-w-0">
                 <MdSearch className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search customer, site, address..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 text-xs rounded-xl pl-9 pr-7 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                  className="w-full min-w-0 bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 text-xs rounded-xl pl-9 pr-7 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                 />
                 {searchQuery && (
                   <button
@@ -1139,24 +1240,24 @@ export default function FieldMap() {
                     <div
                       key={`${site.work_type}-${site.id}`}
                       onClick={() => handleFocusSiteOnMap(site)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer relative bg-white ${
+                      className={`p-3 sm:p-3.5 rounded-xl border transition-all cursor-pointer relative bg-white w-full max-w-full min-w-0 ${
                         isSelected
                           ? "border-sky-500 ring-2 ring-sky-100 shadow-md bg-sky-50/20"
                           : "border-slate-200/80 hover:border-sky-300 hover:shadow-xs"
                       }`}
                     >
                       {/* Header: Sequence, ID, Status Badge */}
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center justify-center border border-slate-200">
+                      <div className="flex items-start justify-between gap-2 mb-2 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center justify-center border border-slate-200 shrink-0">
                             {index + 1}
                           </span>
-                          <span className="font-mono text-xs font-bold text-sky-700">
+                          <span className="font-mono text-xs font-bold text-sky-700 shrink-0">
                             {site.service_number}
                           </span>
                           {site.priority && (
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
                                 site.priority === "critical"
                                   ? "bg-rose-50 text-rose-700 border border-rose-200"
                                   : site.priority === "high"
@@ -1170,7 +1271,7 @@ export default function FieldMap() {
                         </div>
 
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
                             isCompleted
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               : isInProgress
@@ -1183,20 +1284,20 @@ export default function FieldMap() {
                       </div>
 
                       {/* Customer Name */}
-                      <h3 className="font-bold text-slate-900 text-sm leading-snug line-clamp-1 mb-1">
+                      <h3 className="font-bold text-slate-900 text-sm leading-snug line-clamp-1 mb-1 break-words">
                         {site.customer_name}
                       </h3>
 
                       {/* Contact Person & Phone */}
                       {site.contact_person && (
-                        <p className="text-xs text-slate-600 flex items-center gap-1.5 mb-1">
+                        <p className="text-xs text-slate-600 flex items-center gap-1.5 mb-1 flex-wrap min-w-0">
                           <MdPerson className="text-slate-400 text-sm shrink-0" />
-                          <span>{site.contact_person}</span>
+                          <span className="truncate">{site.contact_person}</span>
                           {site.contact_phone && (
                             <a
                               href={`tel:${site.contact_phone}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="text-sky-600 hover:underline flex items-center gap-0.5 ml-1 font-semibold"
+                              className="text-sky-600 hover:underline flex items-center gap-0.5 ml-1 font-semibold shrink-0"
                             >
                               <MdPhone className="text-xs" />
                               {site.contact_phone}
@@ -1206,59 +1307,59 @@ export default function FieldMap() {
                       )}
 
                       {/* Site Address */}
-                      <p className="text-xs text-slate-600 line-clamp-2 mb-2 flex items-start gap-1">
+                      <p className="text-xs text-slate-600 line-clamp-2 mb-2 flex items-start gap-1 break-words">
                         <MdLocationOn className="text-slate-400 text-sm shrink-0 mt-0.5" />
                         <span>{site.address || "No site address registered"}</span>
                       </p>
 
                       {/* Assigned Technicians */}
-                      <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-                        <span className="text-[10px] text-slate-400 font-medium">Technicians:</span>
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2.5 min-w-0">
+                        <span className="text-[10px] text-slate-400 font-medium shrink-0">Technicians:</span>
                         {site.technicians && site.technicians.length > 0 ? (
                           site.technicians.map((t) => (
                             <span
                               key={t.id}
-                              className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-medium border border-slate-200"
+                              className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-medium border border-slate-200 shrink-0"
                             >
                               {t.name}
                             </span>
                           ))
                         ) : (
-                          <span className="text-[10px] text-amber-600 font-semibold italic">Unassigned</span>
+                          <span className="text-[10px] text-amber-600 font-semibold italic shrink-0">Unassigned</span>
                         )}
                       </div>
 
                       {/* GPS status chip & Card Action Buttons */}
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs min-w-0">
                         {site.is_approximate ? (
-                          <div className="flex items-center gap-1 text-amber-800 text-[11px] font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                            <MdLocationOn className="text-xs text-amber-600" />
-                            <span>Approx ({site.approximate_source})</span>
+                          <div className="inline-flex items-center gap-1 text-amber-800 text-[11px] font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit max-w-full">
+                            <MdLocationOn className="text-xs text-amber-600 shrink-0" />
+                            <span className="truncate">Approx ({site.approximate_source})</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSiteToPin(site);
                               }}
-                              className="ml-1 text-sky-700 hover:text-sky-800 underline font-bold cursor-pointer"
+                              className="ml-1 text-sky-700 hover:text-sky-800 underline font-bold cursor-pointer shrink-0"
                             >
                               Edit
                             </button>
                           </div>
                         ) : site.has_coordinates ? (
-                          <div className="flex items-center gap-1 text-emerald-700 text-[11px] font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            <MdLocationOn className="text-xs text-emerald-600" />
-                            <span>GPS Pinned ({Number(site.latitude).toFixed(3)}, {Number(site.longitude).toFixed(3)})</span>
+                          <div className="inline-flex items-center gap-1 text-emerald-700 text-[11px] font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 w-fit max-w-full">
+                            <MdLocationOn className="text-xs text-emerald-600 shrink-0" />
+                            <span className="truncate">GPS Pinned ({Number(site.latitude).toFixed(3)}, {Number(site.longitude).toFixed(3)})</span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1 text-amber-700 text-[11px] font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                            <FaExclamationTriangle className="text-[10px] text-amber-600" />
-                            <span>No GPS Pin</span>
+                          <div className="inline-flex items-center gap-1 text-amber-700 text-[11px] font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit max-w-full">
+                            <FaExclamationTriangle className="text-[10px] text-amber-600 shrink-0" />
+                            <span className="shrink-0">No GPS Pin</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSiteToPin(site);
                               }}
-                              className="ml-1 text-sky-700 hover:text-sky-800 underline font-bold cursor-pointer"
+                              className="ml-1 text-sky-700 hover:text-sky-800 underline font-bold cursor-pointer shrink-0"
                             >
                               + Pin Now
                             </button>
@@ -1266,11 +1367,21 @@ export default function FieldMap() {
                         )}
 
                         {/* Action buttons */}
-                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto justify-start sm:justify-end" onClick={(e) => e.stopPropagation()}>
+                          {/* Focus on Map */}
+                          <button
+                            onClick={() => handleFocusSiteOnMap(site)}
+                            className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer shrink-0"
+                            title="Focus Site on Map"
+                          >
+                            <MdLocationOn className="text-sm text-sky-600" />
+                            <span>Map</span>
+                          </button>
+
                           {/* Navigate / Start Journey Button */}
                           <button
                             onClick={() => handleNavigate(site)}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-xs transition cursor-pointer"
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-xs transition cursor-pointer shrink-0"
                             title="Start Driving Navigation via Google Maps"
                           >
                             <MdNavigation className="text-sm" />
@@ -1280,7 +1391,7 @@ export default function FieldMap() {
                           {/* View Task Details */}
                           <button
                             onClick={() => setViewingService(site)}
-                            className="p-1 bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-700 rounded transition-all text-sm shadow-2xs cursor-pointer"
+                            className="p-1.5 bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-700 rounded-lg transition-all text-sm shadow-2xs cursor-pointer shrink-0"
                             title="View Service Details & Report"
                           >
                             <MdOutlineRemoveRedEye />
@@ -1290,7 +1401,7 @@ export default function FieldMap() {
                           {site.status === "scheduled" && (
                             <button
                               onClick={() => handleStartVisit(site)}
-                              className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer"
+                              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
                               title="Start Site Visit"
                             >
                               <MdPlayArrow className="text-sm" />
@@ -1302,7 +1413,7 @@ export default function FieldMap() {
                           {site.status === "in_progress" && (
                             <button
                               onClick={() => setServiceForComplete(site)}
-                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer"
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
                               title="Complete Site Visit"
                             >
                               <MdCheckCircle className="text-sm" />
@@ -1313,24 +1424,24 @@ export default function FieldMap() {
                       </div>
 
                       {/* Milestone Progress Audit Box (Departed, Arrived, Completed) */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 grid grid-cols-3 gap-1.5 text-[10px]">
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 grid grid-cols-3 gap-1 sm:gap-1.5 text-[10px] min-w-0">
                         {/* Departed */}
                         <div
-                          className={`p-1.5 rounded-lg border ${
+                          className={`p-1 sm:p-1.5 rounded-lg border min-w-0 overflow-hidden ${
                             site.milestones?.journey_started_at
                               ? "bg-sky-50/80 border-sky-200 text-sky-800"
                               : "bg-slate-50 border-slate-100 text-slate-400"
                           }`}
                         >
-                          <div className="flex items-center gap-1 font-semibold">
+                          <div className="flex items-center gap-1 font-semibold truncate">
                             <span>🚗</span>
                             <span>Departed</span>
                           </div>
-                          <div className="mt-0.5 text-[11px] font-bold">
+                          <div className="mt-0.5 text-[10px] sm:text-[11px] font-bold truncate">
                             {formatMilestoneTime(site.milestones?.journey_started_at) || "--:--"}
                           </div>
                           {site.milestones?.journey_lat ? (
-                            <div className="mt-1">
+                            <div className="mt-1 min-w-0 overflow-hidden">
                               <GeoLocationBadge
                                 latitude={site.milestones.journey_lat}
                                 longitude={site.milestones.journey_lng}
@@ -1339,27 +1450,27 @@ export default function FieldMap() {
                               />
                             </div>
                           ) : (
-                            <span className="text-[9px] text-slate-400 block mt-0.5">Pending</span>
+                            <span className="text-[9px] text-slate-400 block mt-0.5 truncate">Pending</span>
                           )}
                         </div>
 
                         {/* Arrived */}
                         <div
-                          className={`p-1.5 rounded-lg border ${
+                          className={`p-1 sm:p-1.5 rounded-lg border min-w-0 overflow-hidden ${
                             site.milestones?.visit_started_at
                               ? "bg-amber-50/80 border-amber-200 text-amber-800"
                               : "bg-slate-50 border-slate-100 text-slate-400"
                           }`}
                         >
-                          <div className="flex items-center gap-1 font-semibold">
+                          <div className="flex items-center gap-1 font-semibold truncate">
                             <span>📍</span>
                             <span>Arrived</span>
                           </div>
-                          <div className="mt-0.5 text-[11px] font-bold">
+                          <div className="mt-0.5 text-[10px] sm:text-[11px] font-bold truncate">
                             {formatMilestoneTime(site.milestones?.visit_started_at) || "--:--"}
                           </div>
                           {site.milestones?.visit_lat ? (
-                            <div className="mt-1">
+                            <div className="mt-1 min-w-0 overflow-hidden">
                               <GeoLocationBadge
                                 latitude={site.milestones.visit_lat}
                                 longitude={site.milestones.visit_lng}
@@ -1368,27 +1479,27 @@ export default function FieldMap() {
                               />
                             </div>
                           ) : (
-                            <span className="text-[9px] text-slate-400 block mt-0.5">Pending</span>
+                            <span className="text-[9px] text-slate-400 block mt-0.5 truncate">Pending</span>
                           )}
                         </div>
 
                         {/* Completed */}
                         <div
-                          className={`p-1.5 rounded-lg border ${
+                          className={`p-1 sm:p-1.5 rounded-lg border min-w-0 overflow-hidden ${
                             site.milestones?.job_completed_at
                               ? "bg-emerald-50/80 border-emerald-200 text-emerald-800"
                               : "bg-slate-50 border-slate-100 text-slate-400"
                           }`}
                         >
-                          <div className="flex items-center gap-1 font-semibold">
+                          <div className="flex items-center gap-1 font-semibold truncate">
                             <span>✅</span>
                             <span>Completed</span>
                           </div>
-                          <div className="mt-0.5 text-[11px] font-bold">
+                          <div className="mt-0.5 text-[10px] sm:text-[11px] font-bold truncate">
                             {formatMilestoneTime(site.milestones?.job_completed_at) || "--:--"}
                           </div>
                           {site.milestones?.job_completed_lat ? (
-                            <div className="mt-1">
+                            <div className="mt-1 min-w-0 overflow-hidden">
                               <GeoLocationBadge
                                 latitude={site.milestones.job_completed_lat}
                                 longitude={site.milestones.job_completed_lng}
@@ -1397,7 +1508,7 @@ export default function FieldMap() {
                               />
                             </div>
                           ) : (
-                            <span className="text-[9px] text-slate-400 block mt-0.5">Pending</span>
+                            <span className="text-[9px] text-slate-400 block mt-0.5 truncate">Pending</span>
                           )}
                         </div>
                       </div>
@@ -1409,8 +1520,21 @@ export default function FieldMap() {
           </div>
 
           {/* Right Panel: Interactive Leaflet Map */}
-          <div className="flex-1 h-full relative overflow-hidden bg-slate-100">
+          <div
+            className={`flex-1 h-full relative overflow-hidden bg-slate-100 ${
+              mobileViewMode === "map" ? "flex flex-col" : "hidden lg:flex"
+            }`}
+          >
             <div ref={mapContainerRef} className="w-full h-full z-0" />
+
+            {/* Mobile floating toggle to Stops list */}
+            <button
+              onClick={() => setMobileViewMode("list")}
+              className="lg:hidden absolute bottom-4 left-4 z-20 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-900 text-white rounded-xl shadow-lg border border-slate-700 text-xs font-bold flex items-center gap-2 backdrop-blur-sm transition cursor-pointer active:scale-95"
+            >
+              <MdRoute className="text-base text-sky-400" />
+              <span>Stops List ({filteredSites.length})</span>
+            </button>
 
             {/* Floating Map Controls overlay */}
             <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">

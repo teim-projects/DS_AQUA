@@ -326,27 +326,28 @@ const ProductList = () => {
                         {currentPageData.map((product) => (
                             <div 
                                 key={product.id} 
-                                className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-4 transform hover:-translate-y-0.5"
+                                className="bg-white rounded-2xl border border-slate-200/60 p-3.5 sm:p-4 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-3 sm:space-y-4 transform hover:-translate-y-0.5 min-w-0 overflow-hidden"
                             >
-                                <div className="flex gap-4 items-start">
+                                <div className="flex gap-3 sm:gap-4 items-start min-w-0">
                                     {product.product_image_url ? (
                                         <img 
                                             src={product.product_image_url} 
                                             alt={product.name} 
-                                            className="w-20 h-20 object-cover rounded-xl border border-slate-200 shadow-xs flex-shrink-0"
+                                            className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl border border-slate-200 shadow-xs shrink-0"
                                         />
                                     ) : (
-                                        <div className="w-20 h-20 bg-blue-50/50 rounded-xl border border-blue-100 flex items-center justify-center text-blue-500 flex-shrink-0 shadow-xs">
-                                            <Package size={32} strokeWidth={1.5} />
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-50/50 rounded-xl border border-blue-100 flex items-center justify-center text-blue-500 shrink-0 shadow-xs">
+                                            <Package size={28} className="sm:hidden" strokeWidth={1.5} />
+                                            <Package size={32} className="hidden sm:block" strokeWidth={1.5} />
                                         </div>
                                     )}
 
-                                    <div className="flex-1 space-y-1">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <h3 className="font-bold text-slate-900 text-sm md:text-base leading-snug">
+                                    <div className="flex-1 min-w-0 space-y-1">
+                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-2 min-w-0">
+                                            <h3 className="font-bold text-slate-900 text-sm md:text-base leading-snug break-words">
                                                 {product.name}
                                             </h3>
-                                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            <div className="flex flex-wrap items-center gap-1.5 shrink-0 mt-0.5 sm:mt-0">
                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
                                                     product.status === 'ACTIVE'
                                                         ? 'bg-emerald-50 text-emerald-600'
@@ -356,75 +357,75 @@ const ProductList = () => {
                                                 }`}>
                                                     {product.status ? product.status.toLowerCase() : 'active'}
                                                 </span>
-                                                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold tracking-wide whitespace-nowrap">
+                                                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold tracking-wide max-w-[140px] truncate sm:max-w-none">
                                                     {product.is_service ? "Service" : product.category_name || "Product"}
                                                 </span>
                                             </div>
                                         </div>
                                         
-                                        <div className="flex items-center gap-2">
-                                            <div className="text-xs text-blue-600 font-semibold tracking-wide uppercase">
+                                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                                            <div className="text-xs text-blue-600 font-semibold tracking-wide uppercase shrink-0">
                                                 {product.product_code || "—"}
                                             </div>
                                             {product.capacity_lph && (
-                                                <span className="px-2 py-0.5 rounded-md bg-cyan-50 border border-cyan-200/60 text-cyan-700 text-[11px] font-semibold flex items-center gap-1">
+                                                <span className="px-2 py-0.5 rounded-md bg-cyan-50 border border-cyan-200/60 text-cyan-700 text-[11px] font-semibold flex items-center gap-1 shrink-0">
                                                     💧 {product.capacity_lph}
                                                 </span>
                                             )}
                                         </div>
 
-                                        <p className="text-xs text-slate-600 font-medium bg-slate-50 border border-slate-200/60 px-2.5 py-1.5 rounded-lg line-clamp-3 leading-relaxed mt-1">
+                                        <p className="text-xs text-slate-600 font-medium bg-slate-50 border border-slate-200/60 px-2.5 py-1.5 rounded-lg line-clamp-3 leading-relaxed mt-1 break-words overflow-hidden w-full">
                                             {formatDescriptionAsBracketedCommas(product.description) || "No item description overview configured inside system metadata parameters."}
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="border-t border-slate-100/80 my-1"></div>
+                                <div className="border-t border-slate-100/80 my-0.5 sm:my-1"></div>
 
-                                <div className="flex items-end justify-between pt-1">
-                                    <div className="grid grid-cols-5 gap-x-4 gap-y-0.5 text-left max-w-lg">
-                                        <div>
-                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Unit Price</div>
-                                            <div className="text-xs md:text-sm font-bold text-slate-900 mt-0.5">
+                                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-1">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-x-3 sm:gap-x-4 gap-y-2 text-left w-full sm:w-auto flex-1 min-w-0">
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">Unit Price</div>
+                                            <div className="text-xs md:text-sm font-bold text-slate-900 mt-0.5 truncate">
                                                 {formatCurrency(product.unit_price)}
                                             </div>
                                         </div>
-                                        <div>
-                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">HSN Code</div>
-                                            <div className="text-xs md:text-sm font-semibold text-slate-700 mt-0.5">
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">HSN Code</div>
+                                            <div className="text-xs md:text-sm font-semibold text-slate-700 mt-0.5 truncate">
                                                 {product.hsn_sac_code || "—"}
                                             </div>
                                         </div>
-                                        <div>
-                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Capacity</div>
-                                            <div className="text-xs md:text-sm font-semibold text-cyan-700 mt-0.5">
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">Capacity</div>
+                                            <div className="text-xs md:text-sm font-semibold text-cyan-700 mt-0.5 truncate">
                                                 {product.capacity_lph || "—"}
                                             </div>
                                         </div>
-                                        <div>
-                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Tax Rate</div>
-                                            <div className="text-xs md:text-sm font-semibold text-slate-700 mt-0.5 whitespace-nowrap">
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">Tax Rate</div>
+                                            <div className="text-xs md:text-sm font-semibold text-slate-700 mt-0.5 whitespace-nowrap truncate">
                                                 {product.gst_percentage ? `${parseFloat(product.gst_percentage)}% GST` : "18% GST"}
                                             </div>
                                         </div>
-                                        <div>
-                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Unit</div>
-                                            <div className="text-xs md:text-sm font-semibold text-slate-700 mt-0.5">
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">Unit</div>
+                                            <div className="text-xs md:text-sm font-semibold text-slate-700 mt-0.5 truncate">
                                                 {product.is_service ? "Project" : "License"}
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center justify-end gap-1.5 shrink-0 border-t border-slate-100 sm:border-0 pt-2 sm:pt-0">
                                         <button 
                                             onClick={() => {
                                                 setSelectedProduct(product);
                                                 setViewOpen(true);
                                             }}
-                                            className="p-1.5 text-slate-400 hover:text-purple-600 rounded-md hover:bg-purple-50 transition-colors"
+                                            className="p-1.5 text-slate-400 hover:text-purple-600 rounded-md hover:bg-purple-50 transition-colors cursor-pointer"
                                             title="View Full Record"
                                         >
-                                            <MdZoomIn size={16} />
+                                            <MdZoomIn size={18} />
                                         </button>
 
                                         {canEditProduct && (
@@ -436,7 +437,7 @@ const ProductList = () => {
                                                 className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
                                                 title="Edit Catalog Item"
                                             >
-                                                <MdEdit size={16} />
+                                                <MdEdit size={18} />
                                             </button>
                                         )}
                                         {canDeleteProduct && (
@@ -445,7 +446,7 @@ const ProductList = () => {
                                                 className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
                                                 title="Delete Catalog Item"
                                             >
-                                                <MdDelete size={16} />
+                                                <MdDelete size={18} />
                                             </button>
                                         )}
                                     </div>
