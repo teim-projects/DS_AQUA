@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
+from quotation.serializers import filter_active_terms
 from .models import (
     Invoice,
     InvoiceItem,
@@ -10,6 +11,16 @@ from .models import (
     AdvancePaymentReceipt,
     number_to_indian_words
 )
+
+
+class ActiveTermsRepresentationMixin:
+    """Sync structured terms_and_conditions with active Quotation Terms Master."""
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if 'terms_and_conditions' in data:
+            data['terms_and_conditions'] = filter_active_terms(data.get('terms_and_conditions'))
+        return data
 
 
 class InvoiceItemSerializer(serializers.ModelSerializer):
@@ -38,7 +49,7 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class InvoiceSerializer(serializers.ModelSerializer):
+class InvoiceSerializer(ActiveTermsRepresentationMixin, serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, required=False)
     company_gstin = serializers.CharField(required=False, allow_blank=True, default="27AALCD8065C1ZJ")
     project_code = serializers.SerializerMethodField(read_only=True)
@@ -129,6 +140,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'current_balance',
             'amount_in_words',
             'terms_conditions',
+            'terms_and_conditions',
             'notes',
 
             'created_by',
@@ -240,7 +252,7 @@ class BillOfSupplyItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class BillOfSupplySerializer(serializers.ModelSerializer):
+class BillOfSupplySerializer(ActiveTermsRepresentationMixin, serializers.ModelSerializer):
     items = BillOfSupplyItemSerializer(many=True, required=False)
     created_by_name = serializers.SerializerMethodField(read_only=True)
     linked_invoice_number = serializers.SerializerMethodField(read_only=True)
@@ -320,6 +332,7 @@ class BillOfSupplySerializer(serializers.ModelSerializer):
             'amc_contract_product',
 
             'terms_conditions',
+            'terms_and_conditions',
             'notes',
             'items',
             'created_by',
@@ -392,7 +405,7 @@ class DeliveryChallanItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class DeliveryChallanSerializer(serializers.ModelSerializer):
+class DeliveryChallanSerializer(ActiveTermsRepresentationMixin, serializers.ModelSerializer):
     items = DeliveryChallanItemSerializer(many=True, required=False)
     created_by_name = serializers.SerializerMethodField()
     linked_invoice_number = serializers.SerializerMethodField()
@@ -478,6 +491,7 @@ class DeliveryChallanSerializer(serializers.ModelSerializer):
             'amount_in_words',
 
             'terms_conditions',
+            'terms_and_conditions',
             'notes',
             'items',
             'created_by',
@@ -544,7 +558,7 @@ class DeliveryChallanSerializer(serializers.ModelSerializer):
         return instance
 
 
-class AdvancePaymentReceiptSerializer(serializers.ModelSerializer):
+class AdvancePaymentReceiptSerializer(ActiveTermsRepresentationMixin, serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField(read_only=True)
     project_code = serializers.SerializerMethodField(read_only=True)
     project_title = serializers.SerializerMethodField(read_only=True)

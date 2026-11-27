@@ -6,6 +6,7 @@ from rest_framework import status
 from google.oauth2 import id_token  # type: ignore
 from google.auth.transport import requests  # type: ignore
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.views import APIView 
@@ -153,7 +154,14 @@ class StaffViewSet(viewsets.ModelViewSet):
     filterset_fields = ['role']
 
     def get_queryset(self):
-        return CustomUser.objects.filter(is_staff=True)
+        queryset = CustomUser.objects.filter(is_staff=True).select_related('role')
+        exclude_role = (self.request.query_params.get('exclude_role') or '').strip()
+        if exclude_role:
+            for r_name in exclude_role.split(','):
+                r_clean = r_name.strip()
+                if r_clean:
+                    queryset = queryset.filter(Q(role__isnull=True) | ~Q(role__name__icontains=r_clean))
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save()

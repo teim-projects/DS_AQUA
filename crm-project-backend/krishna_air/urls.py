@@ -62,6 +62,8 @@ urlpatterns = [
     path('api/inventory/', include('inventory.urls')),
     path('invoice/', include('invoice_billing.urls')),
     path('api/invoice/', include('invoice_billing.urls')),
+    path('audit/', include('audit.urls')),
+    path('api/audit/', include('audit.urls')),
 ]  # Reloaded for Tally connector download route
 
 if settings.DEBUG:

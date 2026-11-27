@@ -142,10 +142,10 @@ class Invoice(models.Model):
     # Fixed DS Aqua Company Header (default values)
     company_name = models.CharField(max_length=255, default="D S WATER TECH PVT LTD", verbose_name="Company Name")
     company_address = models.TextField(
-        default="GROUND FLOOR BELHEKAR COMPLEX SR. NO. 156/5A, OFFICE NO. 1 MANJARI BUDRUK Pune",
+        default="Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004.",
         verbose_name="Company Address"
     )
-    company_phone = models.CharField(max_length=50, default="+919881653030", verbose_name="Company Phone")
+    company_phone = models.CharField(max_length=50, default="+91 866-8274-241, +91 883-0373-068", verbose_name="Company Phone")
     company_email = models.CharField(max_length=100, default="dswatertech1@gmail.com", verbose_name="Company Email")
     company_gstin = models.CharField(max_length=50, default="27AALCD8065C1ZJ", blank=True, verbose_name="Company GSTIN")
     company_state = models.CharField(max_length=50, default="27-Maharashtra", verbose_name="Company State")
@@ -193,6 +193,7 @@ class Invoice(models.Model):
 
     amount_in_words = models.CharField(max_length=500, blank=True, default='', verbose_name="Amount in Words")
     terms_conditions = models.TextField(default="Thank you for doing business with us.", blank=True, verbose_name="Terms & Conditions")
+    terms_and_conditions = models.JSONField(blank=True, null=True, default=list, verbose_name="Terms & Conditions (Structured)")
     notes = models.TextField(blank=True, default='', verbose_name="Internal Notes")
 
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices_created')
@@ -296,11 +297,11 @@ class BillOfSupply(models.Model):
     # Company Details (DS AQUA defaults)
     company_name = models.CharField(max_length=255, default="D S AQUA", verbose_name="Company Name")
     company_address = models.TextField(
-        default="HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra",
+        default="Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004.",
         verbose_name="Company Address"
     )
-    company_phone = models.CharField(max_length=50, default="8830373068", verbose_name="Company Phone")
-    company_email = models.CharField(max_length=100, default="dswastewatersolution@gmail.com", verbose_name="Company Email")
+    company_phone = models.CharField(max_length=50, default="+91 866-8274-241, +91 883-0373-068", verbose_name="Company Phone")
+    company_email = models.CharField(max_length=100, default="dswatertech1@gmail.com", verbose_name="Company Email")
     company_state = models.CharField(max_length=50, default="27-Maharashtra", verbose_name="Company State")
 
     # Bill To Party
@@ -355,6 +356,7 @@ class BillOfSupply(models.Model):
     amc_contract_product = models.CharField(max_length=255, blank=True, default='', verbose_name="Contract Product")
 
     terms_conditions = models.TextField(default="Thank you for doing business with us.", blank=True, verbose_name="Terms & Conditions")
+    terms_and_conditions = models.JSONField(blank=True, null=True, default=list, verbose_name="Terms & Conditions (Structured)")
     notes = models.TextField(default="one years warranty excluding electric parts", blank=True, verbose_name="Description / Warranty Notes")
 
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bills_of_supply_created')
@@ -483,11 +485,11 @@ class DeliveryChallan(models.Model):
     # Company Details (DS AQUA default matching Bill of Supply)
     company_name = models.CharField(max_length=255, default="D S AQUA", verbose_name="Company Name")
     company_address = models.TextField(
-        default="HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra",
+        default="Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004.",
         verbose_name="Company Address"
     )
-    company_phone = models.CharField(max_length=50, default="8830373068", verbose_name="Company Phone")
-    company_email = models.CharField(max_length=100, default="dswastewatersolution@gmail.com", verbose_name="Company Email")
+    company_phone = models.CharField(max_length=50, default="+91 866-8274-241, +91 883-0373-068", verbose_name="Company Phone")
+    company_email = models.CharField(max_length=100, default="dswatertech1@gmail.com", verbose_name="Company Email")
     company_gstin = models.CharField(max_length=50, default="27AALCD8065C1ZJ", blank=True, verbose_name="Company GSTIN")
     company_state = models.CharField(max_length=50, default="27-Maharashtra", verbose_name="Company State")
 
@@ -541,6 +543,7 @@ class DeliveryChallan(models.Model):
         default="1. Goods once dispatched/delivered are non-returnable without prior written consent.\n2. Goods inspected and received in good condition.\n3. Subject to Pune jurisdiction.",
         blank=True, verbose_name="Terms & Conditions"
     )
+    terms_and_conditions = models.JSONField(blank=True, null=True, default=list, verbose_name="Terms & Conditions (Structured)")
     notes = models.TextField(
         default="Material dispatched for Installation / Commissioning / Maintenance service purpose.",
         blank=True, verbose_name="Dispatch Notes"
@@ -669,11 +672,11 @@ class AdvancePaymentReceipt(models.Model):
     # Company Details (DS AQUA defaults matching Bill of Supply & Challan)
     company_name = models.CharField(max_length=255, default="D S AQUA", verbose_name="Company Name")
     company_address = models.TextField(
-        default="HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra",
+        default="Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004.",
         verbose_name="Company Address"
     )
-    company_phone = models.CharField(max_length=50, default="8830373068", verbose_name="Company Phone")
-    company_email = models.CharField(max_length=100, default="dswastewatersolution@gmail.com", verbose_name="Company Email")
+    company_phone = models.CharField(max_length=50, default="+91 866-8274-241, +91 883-0373-068", verbose_name="Company Phone")
+    company_email = models.CharField(max_length=100, default="dswatertech1@gmail.com", verbose_name="Company Email")
     company_gstin = models.CharField(max_length=50, default="27AALCD8065C1ZJ", blank=True, verbose_name="Company GSTIN")
     company_state = models.CharField(max_length=50, default="27-Maharashtra", verbose_name="Company State")
 
@@ -710,6 +713,7 @@ class AdvancePaymentReceipt(models.Model):
         default="1. Advance payment received is non-refundable upon project/contract commencement.\n2. Official tax invoice / bill will be issued upon milestone / progress delivery.\n3. Subject to Pune jurisdiction.",
         blank=True, verbose_name="Terms & Conditions"
     )
+    terms_and_conditions = models.JSONField(blank=True, null=True, default=list, verbose_name="Terms & Conditions (Structured)")
 
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='advance_receipts_created')
     created_at = models.DateTimeField(auto_now_add=True)

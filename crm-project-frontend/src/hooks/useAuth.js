@@ -18,6 +18,7 @@ const SYSTEM_MODULE_KEYS = [
   "billing",
   "inventory",
   "invoices",
+  "audit",
 ];
 
 function getDefaultPermissionsForRole(roleName) {
@@ -28,7 +29,7 @@ function getDefaultPermissionsForRole(roleName) {
     if (norm === "admin" || norm === "superuser") {
       matrix[key] = { view: true, create: true, edit: true, delete: true };
     } else {
-      const isSystemAdminMod = key === "accounts" || key === "roles";
+      const isSystemAdminMod = key === "accounts" || key === "roles" || key === "audit";
       matrix[key] = { view: !isSystemAdminMod, create: false, edit: false, delete: false };
     }
   });

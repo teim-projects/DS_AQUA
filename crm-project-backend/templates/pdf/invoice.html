@@ -510,8 +510,7 @@
                 <td class="header-left-col">
                     <div class="tax-invoice-banner">{% if is_delivery_challan %}DELIVERY CHALLAN{% elif is_bill_of_supply %}BILL OF SUPPLY{% elif is_proforma %}PROFORMA INVOICE{% else %}TAX INVOICE{% endif %}</div>
                 </td>
-                <td class="header-right-col">
-                    <div class="recipient-tag">{% if is_delivery_challan %}ORIGINAL FOR CONSIGNEE{% elif is_bill_of_supply %}ORIGINAL{% elif is_proforma %}PROFORMA INVOICE{% else %}ORIGINAL FOR RECIPIENT{% endif %}</div>
+                <td class="header-right-col" style="vertical-align: middle;">
                     {% if logo_base64 %}
                     <img src="{{ logo_base64 }}" alt="DS AQUA Logo" class="company-logo" />
                     {% else %}
@@ -529,19 +528,17 @@
         <!-- 3-COLUMN COMPANY DETAILS (ADDRESS, PHONE/EMAIL, STATE/GSTIN) -->
         <table class="company-info-table">
             <tr>
-                <td style="width: 44%;">
+                <td style="width: 48%;">
                     <div class="meta-label">Address:</div>
-                    <div class="meta-val">
-                        {{ company_address }}
-                    </div>
+                    <div class="meta-val" style="white-space: pre-line;">{{ company_address }}</div>
                 </td>
                 <td style="width: 28%;">
-                    <div><span class="meta-label">Phone:</span></div>
+                    <div><span class="meta-label">Mobile No:</span></div>
                     <div class="meta-val">{{ company_phone }}</div>
                     <div style="margin-top: 3px;"><span class="meta-label">Email:</span></div>
                     <div class="meta-val">{{ company_email }}</div>
                 </td>
-                <td style="width: 28%;">
+                <td style="width: 24%;">
                     {% if is_bill_of_supply or is_delivery_challan %}
                     <div><span class="meta-label">State:</span></div>
                     <div class="meta-val">{{ company_state }}</div>
@@ -781,9 +778,25 @@
                     <!-- Terms and Conditions -->
                     <div class="section-divider">
                         <div class="box-title">Terms And Conditions</div>
+                        {% if terms_list %}
+                        <div style="font-size: 8.5px; color: #334155; line-height: 1.4;">
+                            {% for term in terms_list %}
+                            <div style="margin-bottom: 3px;">
+                                {% if term.bullets %}
+                                    {% for b in term.bullets %}
+                                    <div style="margin-bottom: 1.5px;">&bull; {{ b }}</div>
+                                    {% endfor %}
+                                {% elif term.description %}
+                                    <div style="margin-bottom: 1.5px;">&bull; {{ term.description }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
                         <div style="font-size: 8.5px; color: #475569;">
                             {{ terms_conditions|default:"Thank you for doing business with us." }}
                         </div>
+                        {% endif %}
                     </div>
 
                     <!-- Signatory -->

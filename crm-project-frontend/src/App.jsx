@@ -46,6 +46,7 @@ import InvoiceFormView from "./components/invoice/InvoiceFormView";
 import BillOfSupplyManagement from "./pages/BillOfSupplyManagement";
 import DeliveryChallanManagement from "./pages/DeliveryChallanManagement";
 import AdvancePaymentReceiptManagement from "./pages/AdvancePaymentReceiptManagement";
+import AuditManagement from "./pages/AuditManagement";
 import { useUserRole } from "./hooks/useAuth";
 import { useTechnicianLocationTracker } from "./hooks/useTechnicianLocationTracker";
 import { getBaseApiUrl } from "./utils/apiConfig";
@@ -212,6 +213,14 @@ function AppRoutes() {
         element={
           <ModuleProtectedRoute module="roles">
             <RolesPage />
+          </ModuleProtectedRoute>
+        }
+      />
+      <Route
+        path="/audit"
+        element={
+          <ModuleProtectedRoute module="audit">
+            <AuditManagement />
           </ModuleProtectedRoute>
         }
       />

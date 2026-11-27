@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { getBaseApiUrl } from "../../utils/apiConfig";
+import QuotationTermsSelector from "../terms_conditions/QuotationTermsSelector";
 
 function numberToIndianWords(num) {
   if (num === null || num === undefined || isNaN(num) || num === 0) {
@@ -120,10 +121,10 @@ export default function AddDeliveryChallanModal({
   // Fixed Company Details (Default DS AQUA matching Bill of Supply)
   const [companyName] = useState("D S AQUA");
   const [companyAddress] = useState(
-    "HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra"
+    "Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004."
   );
-  const [companyPhone] = useState("8830373068");
-  const [companyEmail] = useState("dswastewatersolution@gmail.com");
+  const [companyPhone] = useState("+91 866-8274-241, +91 883-0373-068");
+  const [companyEmail] = useState("dswatertech1@gmail.com");
   const [companyState] = useState("27-Maharashtra");
 
   // 1. Bill To Party
@@ -174,6 +175,7 @@ export default function AddDeliveryChallanModal({
   const [termsConditions, setTermsConditions] = useState(
     "1. Goods once dispatched/delivered are non-returnable without prior approval.\n2. Goods inspected and received in good condition.\n3. Subject to Pune jurisdiction."
   );
+  const [selectedTerms, setSelectedTerms] = useState([]);
 
   // Cities filtered by selected states
   const billToCities = useMemo(() => {
@@ -358,6 +360,7 @@ export default function AddDeliveryChallanModal({
 
     setNotes(data.notes || "Material dispatched for installation / service purpose.");
     setTermsConditions(data.terms_conditions || "Thank you for doing business with us.");
+    setSelectedTerms(Array.isArray(data.terms_and_conditions) ? data.terms_and_conditions : []);
 
     if (data.project) setSelectedProjectId(String(data.project));
     if (data.amc_contract) setSelectedAmcId(String(data.amc_contract));
@@ -879,7 +882,13 @@ export default function AddDeliveryChallanModal({
       grand_total: grandTotalValue,
       amount_in_words: numberToIndianWords(grandTotalValue),
 
-      terms_conditions: termsConditions,
+      terms_conditions:
+        selectedTerms.length > 0
+          ? selectedTerms.map((t) => `${t.name}: ${t.description}`).join("\n")
+          : isEdit
+          ? termsConditions
+          : "",
+      terms_and_conditions: selectedTerms,
       notes: notes,
 
       items: items.map((it) => ({
@@ -1660,32 +1669,27 @@ export default function AddDeliveryChallanModal({
               </div>
             </div>
 
-            {/* 6. REMARKS & TERMS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 6. REMARKS & QUOTATION TERMS */}
+            <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                   Dispatch Purpose / Notes
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Notes on delivery or materials..."
                   className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Challan Terms &amp; Conditions
-                </label>
-                <textarea
-                  rows={3}
-                  value={termsConditions}
-                  onChange={(e) => setTermsConditions(e.target.value)}
-                  placeholder="Terms and conditions..."
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
-                />
-              </div>
+
+              <QuotationTermsSelector
+                selectedTerms={selectedTerms}
+                onChange={setSelectedTerms}
+                isEdit={isEdit}
+                legacyTermsText={termsConditions}
+              />
             </div>
           </form>
         </div>

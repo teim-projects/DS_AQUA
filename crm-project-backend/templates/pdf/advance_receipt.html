@@ -381,7 +381,6 @@
                     <div class="receipt-banner">ADVANCE PAYMENT RECEIPT</div>
                 </td>
                 <td class="header-right-col">
-                    <div class="recipient-tag">ORIGINAL FOR RECIPIENT</div>
                     {% if logo_base64 %}
                     <img src="{{ logo_base64 }}" alt="DS AQUA Logo" class="company-logo" />
                     {% else %}
@@ -399,19 +398,17 @@
         <!-- 3-COLUMN COMPANY DETAILS -->
         <table class="company-info-table">
             <tr>
-                <td style="width: 44%;">
+                <td style="width: 48%;">
                     <div class="meta-label">Address:</div>
-                    <div class="meta-val">
-                        {{ company_address }}
-                    </div>
+                    <div class="meta-val" style="white-space: pre-line;">{{ company_address }}</div>
                 </td>
                 <td style="width: 28%;">
-                    <div><span class="meta-label">Phone:</span></div>
+                    <div><span class="meta-label">Mobile No:</span></div>
                     <div class="meta-val">{{ company_phone }}</div>
                     <div style="margin-top: 3px;"><span class="meta-label">Email:</span></div>
                     <div class="meta-val">{{ company_email }}</div>
                 </td>
-                <td style="width: 28%;">
+                <td style="width: 24%;">
                     <div><span class="meta-label">GSTIN:</span></div>
                     <div class="meta-val" style="font-weight: 800;">{{ receipt.company_gstin|default:"27AALCD8065C1ZJ" }}</div>
                     <div style="margin-top: 3px;"><span class="meta-label">State:</span></div>
@@ -585,9 +582,25 @@
                     {% endif %}
 
                     <div class="box-title">Terms &amp; Conditions</div>
+                    {% if terms_list %}
+                    <div style="font-size: 8px; color: #334155; line-height: 1.4;">
+                        {% for term in terms_list %}
+                        <div style="margin-bottom: 3px;">
+                            {% if term.bullets %}
+                                {% for b in term.bullets %}
+                                <div style="margin-bottom: 1.5px;">&bull; {{ b }}</div>
+                                {% endfor %}
+                            {% elif term.description %}
+                                <div style="margin-bottom: 1.5px;">&bull; {{ term.description }}</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
                     <div style="font-size: 8px; color: #64748b; line-height: 1.4;">
                         {{ receipt.terms_conditions|default:"1. Advance payment received is non-refundable upon project/contract commencement.<br>2. Official tax invoice / bill will be issued upon milestone / progress delivery.<br>3. Subject to Pune jurisdiction."|safe }}
                     </div>
+                    {% endif %}
                 </td>
 
                 <!-- Right Pane: Deposited Bank Details -->

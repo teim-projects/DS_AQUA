@@ -33,6 +33,92 @@ def amount_to_indian_words(num_val):
     return f"{num_val} Rupees only"
 
 
+def build_document_terms_list(doc):
+    """
+    Build structured bulleted terms_list matching quotation/utils/pdf_generator.py
+    from structured terms_and_conditions JSONField, synced against active TermsConditions master.
+    """
+    raw_terms = getattr(doc, 'terms_and_conditions', None) or []
+    if not isinstance(raw_terms, list) or len(raw_terms) == 0:
+        return []
+
+    from quotation.serializers import filter_active_terms
+    from quotation.models import TermsConditions
+    from quotation.utils.pdf_generator import parse_term_bullets
+
+    active_terms_list = filter_active_terms(raw_terms)
+    master_terms_by_id = {
+        t.id: t
+        for t in TermsConditions.objects.filter(is_active=True, category__is_active=True).select_related('category')
+    }
+    master_terms_by_name = {t.name.strip().lower(): t for t in master_terms_by_id.values()}
+
+    formatted_terms = []
+    for term in active_terms_list:
+        if not isinstance(term, dict):
+            continue
+        term_id = term.get('id')
+        term_name = (term.get('name') or '').strip()
+
+        master_obj = None
+        if term_id is not None:
+            try:
+                master_obj = master_terms_by_id.get(int(term_id))
+            except (ValueError, TypeError):
+                pass
+        if not master_obj and term_name:
+            master_obj = master_terms_by_name.get(term_name.lower())
+
+        if master_obj:
+            display_name = master_obj.name
+            term_desc = master_obj.description if master_obj.description else (term.get('description') or '')
+            category_name = master_obj.category.name if master_obj.category else term.get('category_name', '')
+        else:
+            display_name = term_name
+            term_desc = term.get('description') or ''
+            category_name = term.get('category_name', '')
+
+        term_desc = term_desc.strip()
+        bullets = parse_term_bullets(term_desc)
+        formatted_terms.append({
+            'id': term.get('id'),
+            'name': display_name,
+            'category_name': category_name,
+            'description': term_desc,
+            'bullets': bullets,
+        })
+
+    return formatted_terms
+
+
+DEFAULT_COMPANY_ADDRESS = (
+    "Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\n"
+    "Corporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004."
+)
+DEFAULT_COMPANY_PHONE = "+91 866-8274-241, +91 883-0373-068"
+DEFAULT_COMPANY_EMAIL = "dswatertech1@gmail.com"
+_LEGACY_ADDRESSES = {
+    "GROUND FLOOR BELHEKAR COMPLEX SR. NO. 156/5A, OFFICE NO. 1 MANJARI BUDRUK Pune",
+    "HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra",
+}
+_LEGACY_PHONES = {"+919881653030", "8830373068", "+91 8830373068"}
+_LEGACY_EMAILS = {"dswastewatersolution@gmail.com"}
+
+
+def _resolve_company_info(doc, default_name='D S WATER TECH PVT LTD'):
+    """Resolve company header contact details, upgrading legacy hardcoded defaults automatically."""
+    raw_addr = (getattr(doc, 'company_address', None) or '').strip()
+    raw_phone = (getattr(doc, 'company_phone', None) or '').strip()
+    raw_email = (getattr(doc, 'company_email', None) or '').strip()
+
+    company_name = getattr(doc, 'company_name', None) or default_name
+    company_address = DEFAULT_COMPANY_ADDRESS if (not raw_addr or raw_addr in _LEGACY_ADDRESSES) else raw_addr
+    company_phone = DEFAULT_COMPANY_PHONE if (not raw_phone or raw_phone in _LEGACY_PHONES) else raw_phone
+    company_email = DEFAULT_COMPANY_EMAIL if (not raw_email or raw_email in _LEGACY_EMAILS) else raw_email
+    company_state = getattr(doc, 'company_state', None) or '27-Maharashtra'
+    return company_name, company_address, company_phone, company_email, company_state
+
+
 def build_invoice_pdf_context(invoice):
     """Build context for rendering invoice.html template"""
     inv_type = str(getattr(invoice, 'invoice_type', '')).upper()
@@ -117,19 +203,11 @@ def build_invoice_pdf_context(invoice):
     elif not description and is_delivery_challan:
         description = 'Material dispatched for project / service / maintenance delivery purpose.'
 
-    # Company info resolution
-    if is_bill_of_supply or is_delivery_challan:
-        company_name = getattr(invoice, 'company_name', None) or 'D S AQUA'
-        company_address = getattr(invoice, 'company_address', None) or 'HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra'
-        company_phone = getattr(invoice, 'company_phone', None) or '8830373068'
-        company_email = getattr(invoice, 'company_email', None) or 'dswastewatersolution@gmail.com'
-        company_state = getattr(invoice, 'company_state', None) or '27-Maharashtra'
-    else:
-        company_name = getattr(invoice, 'company_name', None) or 'D S WATER TECH PVT LTD'
-        company_address = getattr(invoice, 'company_address', None) or 'GROUND FLOOR BELHEKAR COMPLEX SR. NO. 156/5A, OFFICE NO. 1 MANJARI BUDRUK Pune'
-        company_phone = getattr(invoice, 'company_phone', None) or '+919881653030'
-        company_email = getattr(invoice, 'company_email', None) or 'dswatertech1@gmail.com'
-        company_state = getattr(invoice, 'company_state', None) or '27-Maharashtra'
+    # Company info resolution (also seamlessly upgrades legacy hardcoded defaults)
+    default_comp_name = 'D S AQUA' if (is_bill_of_supply or is_delivery_challan) else 'D S WATER TECH PVT LTD'
+    company_name, company_address, company_phone, company_email, company_state = _resolve_company_info(
+        invoice, default_name=default_comp_name
+    )
 
     # Pay To Banking Information resolution:
     # 1. Linked BillingDetail on invoice
@@ -166,7 +244,8 @@ def build_invoice_pdf_context(invoice):
     if sub_total is None or sub_total == Decimal('0.00'):
         sub_total = sum((it['price_per_unit'] * it['quantity']) for it in items_list) if items_list else Decimal('0.00')
 
-    terms_conditions = getattr(invoice, 'terms_conditions', None) or getattr(invoice, 'terms_and_conditions', None) or 'Thank you for doing business with us.'
+    terms_conditions = getattr(invoice, 'terms_conditions', None) or 'Thank you for doing business with us.'
+    terms_list = build_document_terms_list(invoice)
 
     # Round off & Abs
     try:
@@ -252,6 +331,7 @@ def build_invoice_pdf_context(invoice):
         'account_holder': account_holder,
         'sub_total': sub_total,
         'terms_conditions': terms_conditions,
+        'terms_list': terms_list,
         'round_off_val': round_off_val,
         'round_off_abs': round_off_abs,
         'total_gst_half': total_gst_half,
@@ -355,11 +435,9 @@ def build_advance_receipt_context(receipt):
     }
     payment_mode_display = payment_mode_map.get(payment_mode_raw, payment_mode_raw)
 
-    company_name = getattr(receipt, 'company_name', None) or 'D S AQUA'
-    company_address = getattr(receipt, 'company_address', None) or 'HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra'
-    company_phone = getattr(receipt, 'company_phone', None) or '8830373068'
-    company_email = getattr(receipt, 'company_email', None) or 'dswastewatersolution@gmail.com'
-    company_state = getattr(receipt, 'company_state', None) or '27-Maharashtra'
+    company_name, company_address, company_phone, company_email, company_state = _resolve_company_info(
+        receipt, default_name='D S AQUA'
+    )
 
     # Banking Info Resolution
     billing_obj = getattr(receipt, 'billing_detail', None)
@@ -387,8 +465,11 @@ def build_advance_receipt_context(receipt):
     amc_contract_number = (getattr(receipt.amc_contract, 'contract_id', None) or getattr(receipt.amc_contract, 'contract_number', None)) if receipt.amc_contract else None
     service_number = (getattr(receipt.service, 'service_id', None) or getattr(receipt.service, 'service_number', None)) if receipt.service else None
 
+    terms_list = build_document_terms_list(receipt)
+
     return {
         'receipt': receipt,
+        'terms_list': terms_list,
         'payment_mode_display': payment_mode_display,
         'company_name': company_name,
         'company_address': company_address,

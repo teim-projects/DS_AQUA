@@ -1224,6 +1224,31 @@ class LeadViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(lead)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    def perform_destroy(self, instance):
+        # Preserve client details on linked quotations before Quotation.lead becomes NULL.
+        snapshot_fields = (
+            'company_name',
+            'contact_person',
+            'mobile_number',
+            'email_address',
+            'state',
+            'city',
+            'industry_type',
+            'gst_number',
+            'pan_number',
+            'msme_number',
+            'address',
+        )
+        for quot in instance.quotations.all():
+            changed = []
+            for fname in snapshot_fields:
+                if not getattr(quot, fname, None) and getattr(instance, fname, None):
+                    setattr(quot, fname, getattr(instance, fname))
+                    changed.append(fname)
+            if changed:
+                quot.save(update_fields=changed)
+        super().perform_destroy(instance)
+
 
 class LeadFAQViewSet(viewsets.ModelViewSet):
     queryset = LeadFAQ.objects.all().order_by("sort_order", "id")

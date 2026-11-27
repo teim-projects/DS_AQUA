@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'technician',
     'inventory',
     'invoice_billing',
+    'audit',
 ] 
 
 SITE_ID = 1
@@ -90,6 +91,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'audit.middleware.AuditRequestMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
      "allauth.account.middleware.AccountMiddleware",

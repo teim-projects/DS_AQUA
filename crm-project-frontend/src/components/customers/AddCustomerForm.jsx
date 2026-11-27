@@ -20,7 +20,7 @@ export default function AddCustomerForm({
   const API_URL = `${BASE_API}/lead/customer/`;
   const LEAD_API_URL = `${BASE_API}/lead/lead/`;
   const PRODUCT_API_URL = `${BASE_API}/product/products/`;
-  const STAFF_API_URL = `${BASE_API}/auth/staff/all/`;
+  const STAFF_API_URL = `${BASE_API}/auth/staff/all/?exclude_role=technician`;
 
   const [formData, setFormData] = useState({
     customer_code: "",
@@ -126,8 +126,12 @@ export default function AddCustomerForm({
       })
       .then((data) => {
         const items = Array.isArray(data) ? data : data.results ?? [];
+        const nonTechnicians = items.filter((u) => {
+          const rName = (u?.role?.name || u?.role_name || (typeof u?.role === "string" ? u.role : "")).trim().toLowerCase();
+          return !rName.includes("technician");
+        });
         setStaffOptions(
-          items.map((u) => ({
+          nonTechnicians.map((u) => ({
             id: u.id,
             name: `${u.first_name} ${u.last_name}`.trim() || u.email || u.mobile_no,
             email: u.email,
@@ -394,7 +398,7 @@ export default function AddCustomerForm({
 
   const validate = () => {
     if (!formData.name.trim()) {
-      Swal.fire({ icon: "error", title: "Validation", text: "Company Name is required" });
+      Swal.fire({ icon: "error", title: "Validation", text: "Company / Client Name is required" });
       return false;
     }
 
@@ -713,14 +717,14 @@ export default function AddCustomerForm({
 
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-slate-600">
-                      Company Name <span className="text-red-500">*</span>
+                      Company / Client Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       name="name"
                       className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500 bg-white"
                       value={formData.name}
                       onChange={handleChange}
-                      placeholder="Company name"
+                      placeholder="Company / Client name"
                     />
                   </div>
 

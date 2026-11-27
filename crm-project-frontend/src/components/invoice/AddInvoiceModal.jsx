@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { getBaseApiUrl } from "../../utils/apiConfig";
+import QuotationTermsSelector from "../terms_conditions/QuotationTermsSelector";
 
 // Live Indian Currency Number to Words Converter
 function numberToIndianWords(amount) {
@@ -130,8 +131,9 @@ export default function AddInvoiceModal({
   // Fixed DS Aqua Company Details
   const companyDetails = {
     company_name: "D S WATER TECH PVT LTD",
-    company_address: "GROUND FLOOR BELHEKAR COMPLEX SR. NO. 156/5A, OFFICE NO. 1 MANJARI BUDRUK Pune",
-    company_phone: "+919881653030",
+    company_address:
+      "Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004.",
+    company_phone: "+91 866-8274-241, +91 883-0373-068",
     company_email: "dswatertech1@gmail.com",
     company_gstin: "27AALCD8065C1ZJ",
     company_state: "27-Maharashtra"
@@ -228,6 +230,7 @@ export default function AddInvoiceModal({
   const [previousBalance, setPreviousBalance] = useState(0);
   const [currentBalance, setCurrentBalance] = useState(0);
   const [termsAndConditions, setTermsAndConditions] = useState("Thank you for doing business with us.");
+  const [selectedTerms, setSelectedTerms] = useState([]);
   const [status, setStatus] = useState("PAID");
 
   // Function to fetch next invoice number
@@ -463,6 +466,7 @@ export default function AddInvoiceModal({
           setPreviousBalance(parseFloat(data.previous_balance) || 0);
           setCurrentBalance(parseFloat(data.current_balance) || 0);
           setTermsAndConditions(data.terms_conditions || "Thank you for doing business with us.");
+          setSelectedTerms(Array.isArray(data.terms_and_conditions) ? data.terms_and_conditions : []);
           setStatus(data.status || "PAID");
 
           // Items
@@ -499,6 +503,9 @@ export default function AddInvoiceModal({
       setBillToContact(initialInvoice.bill_to_contact || "");
       setBillToGstin(initialInvoice.bill_to_gstin || "");
       if (initialInvoice.items) setItems(initialInvoice.items);
+      if (Array.isArray(initialInvoice.terms_and_conditions)) {
+        setSelectedTerms(initialInvoice.terms_and_conditions);
+      }
     }
   }, [isOpen, isEdit, invoiceId, initialInvoice]);
 
@@ -1170,7 +1177,13 @@ export default function AddInvoiceModal({
         previous_balance: parseFloat(previousBalance) || 0,
         current_balance: parseFloat(currentBalance) || 0,
         amount_in_words: calculation.words,
-        terms_conditions: termsAndConditions,
+        terms_conditions:
+          selectedTerms.length > 0
+            ? selectedTerms.map((t) => `${t.name}: ${t.description}`).join("\n")
+            : isEdit
+            ? termsAndConditions
+            : "",
+        terms_and_conditions: selectedTerms,
         status: calculation.balance <= 0 ? "PAID" : parseFloat(receivedAmount) > 0 ? "PARTIALLY_PAID" : "UNPAID",
 
         items: items.map((it) => {
@@ -2136,17 +2149,6 @@ export default function AddInvoiceModal({
                     </div>
                   </div>
                 </div>
-
-                {/* Terms and conditions */}
-                <div className="space-y-1 pt-1">
-                  <label className="block text-xs font-semibold text-slate-600">Terms & Conditions</label>
-                  <textarea
-                    rows={2}
-                    value={termsAndConditions}
-                    onChange={(e) => setTermsAndConditions(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-sky-500 bg-white"
-                  />
-                </div>
               </div>
 
               {/* Live Totals & Payment Summary Card */}
@@ -2249,6 +2251,16 @@ export default function AddInvoiceModal({
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* 7. COMMERCIAL TERMS & CONDITIONS (Same as Quotation) */}
+            <div className="pt-1">
+              <QuotationTermsSelector
+                selectedTerms={selectedTerms}
+                onChange={setSelectedTerms}
+                isEdit={isEdit}
+                legacyTermsText={termsAndConditions}
+              />
             </div>
 
           </form>

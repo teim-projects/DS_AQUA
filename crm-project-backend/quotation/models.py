@@ -132,7 +132,7 @@ class Quotation(models.Model):
     # ✅ Only lead field - removed customer
     lead = models.ForeignKey(
         "lead_management.lead_management",
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name="quotations",
         null=True,
         blank=True

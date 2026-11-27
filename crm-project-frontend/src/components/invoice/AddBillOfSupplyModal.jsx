@@ -11,6 +11,7 @@ import {
   MdRefresh,
 } from "react-icons/md";
 import { getBaseApiUrl } from "../../utils/apiConfig";
+import QuotationTermsSelector from "../terms_conditions/QuotationTermsSelector";
 
 // Live Indian Currency Number to Words Converter
 function numberToIndianWords(amount) {
@@ -100,10 +101,10 @@ export default function AddBillOfSupplyModal({
   // Fixed Company Details (Default for Bill of Supply)
   const [companyName, setCompanyName] = useState("D S AQUA");
   const [companyAddress, setCompanyAddress] = useState(
-    "HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra"
+    "Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004."
   );
-  const [companyPhone, setCompanyPhone] = useState("8830373068");
-  const [companyEmail, setCompanyEmail] = useState("dswastewatersolution@gmail.com");
+  const [companyPhone, setCompanyPhone] = useState("+91 866-8274-241, +91 883-0373-068");
+  const [companyEmail, setCompanyEmail] = useState("dswatertech1@gmail.com");
   const [companyState, setCompanyState] = useState("27-Maharashtra");
 
   // 1. Bill To Party (Exact structure matching AddInvoiceModal)
@@ -165,6 +166,7 @@ export default function AddBillOfSupplyModal({
   const [termsConditions, setTermsConditions] = useState(
     "Thank you for doing business with us."
   );
+  const [selectedTerms, setSelectedTerms] = useState([]);
 
   // Bank Info (from Billing Details Master)
   const [selectedBillingDetailId, setSelectedBillingDetailId] = useState("");
@@ -304,10 +306,10 @@ export default function AddBillOfSupplyModal({
     setCompanyName(data.company_name || "D S AQUA");
     setCompanyAddress(
       data.company_address ||
-        "HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra"
+        "Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004."
     );
-    setCompanyPhone(data.company_phone || "8830373068");
-    setCompanyEmail(data.company_email || "dswastewatersolution@gmail.com");
+    setCompanyPhone(data.company_phone || "+91 866-8274-241, +91 883-0373-068");
+    setCompanyEmail(data.company_email || "dswatertech1@gmail.com");
     setCompanyState(data.company_state || "27-Maharashtra");
 
     setBillToCompanyName(data.bill_to_name || "");
@@ -334,6 +336,8 @@ export default function AddBillOfSupplyModal({
     setSelectedBillingDetailId(data.billing_detail || "");
     setPaymentMode(data.payment_mode || "Federal Bank(amc)");
     setDescription(data.notes || "one years warranty excluding electric parts");
+    if (data.terms_conditions) setTermsConditions(data.terms_conditions);
+    setSelectedTerms(Array.isArray(data.terms_and_conditions) ? data.terms_and_conditions : []);
 
     setPoNumber(data.po_number || "");
 
@@ -722,7 +726,13 @@ export default function AddBillOfSupplyModal({
       amc_contract_number: amcContractNumber,
       amc_contract_product: amcProduct,
 
-      terms_conditions: termsConditions,
+      terms_conditions:
+        selectedTerms.length > 0
+          ? selectedTerms.map((t) => `${t.name}: ${t.description}`).join("\n")
+          : isEdit
+          ? termsConditions
+          : "",
+      terms_and_conditions: selectedTerms,
       notes: description,
       items: itemsPayload,
     };
@@ -1504,6 +1514,16 @@ export default function AddBillOfSupplyModal({
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="one years warranty excluding electric parts"
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-sky-500 bg-white"
+                />
+              </div>
+
+              {/* 7. COMMERCIAL TERMS & CONDITIONS (Same as Quotation) */}
+              <div className="pt-2">
+                <QuotationTermsSelector
+                  selectedTerms={selectedTerms}
+                  onChange={setSelectedTerms}
+                  isEdit={isEdit}
+                  legacyTermsText={termsConditions}
                 />
               </div>
             </div>

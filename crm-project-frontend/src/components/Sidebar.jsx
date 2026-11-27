@@ -90,6 +90,16 @@ function TallyIcon(props) {
   );
 }
 
+function AuditIcon(props) {
+  return (
+    <svg {...props} viewBox="0 0 24 24" fill="none">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // ✅ NEW: Technician Operational Icons
 function TodaysWorkIcon(props) {
   return (
@@ -262,6 +272,7 @@ const allSidebarItems = [
   { key: "accounts", label: "Accounts", icon: BuildingIcon, path: "/accounts", section: "ADMINISTRATION" },
   { key: "technicians", label: "Technicians", icon: TechnicianIcon, path: "/technicians", section: "ADMINISTRATION" },
   { key: "roles", label: "Role Management", icon: ShieldIcon, path: "/roles", section: "ADMINISTRATION" },
+  { key: "audit", label: "Audit / Deleted Data", icon: AuditIcon, path: "/audit", section: "ADMINISTRATION" },
 ];
 
 export default function Sidebar({ children }) {
@@ -386,6 +397,7 @@ export default function Sidebar({ children }) {
       accounts: "accounts",
       technicians: "accounts",
       roles: "roles",
+      audit: "audit",
       billing: "billing",
       advance_receipts: "invoices",
       invoices: "invoices",
@@ -426,6 +438,7 @@ export default function Sidebar({ children }) {
     if (currentPath.startsWith("/technician/completed-work")) return "Completed Work";
     if (currentPath.startsWith("/technician/dashboard")) return "Technician Field Desk";
     if (currentPath.startsWith("/categories")) return "Category Master";
+    if (currentPath.startsWith("/audit")) return "Audit & Deleted Data";
     if (currentPath.startsWith("/billing-details")) return "Billing Details Master";
     if (currentPath.startsWith("/technicians")) return "Technician Management";
     if (currentPath.startsWith("/advance-receipts")) return "Advance Payment Receipt";

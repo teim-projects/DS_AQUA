@@ -14,6 +14,7 @@ import {
 } from "react-icons/md";
 import { Briefcase, ShieldAlert, Wrench, UserCheck, DollarSign, CreditCard } from "lucide-react";
 import { getBaseApiUrl } from "../../utils/apiConfig";
+import QuotationTermsSelector from "../terms_conditions/QuotationTermsSelector";
 
 // Standard Indian Currency Words converter
 function numberToIndianWords(num) {
@@ -150,6 +151,7 @@ export default function AddAdvancePaymentReceiptModal({
   const [termsConditions, setTermsConditions] = useState(
     "1. Advance payment received is non-refundable upon project/contract commencement.\n2. Official tax invoice / bill will be issued upon milestone / progress delivery.\n3. Subject to Pune jurisdiction."
   );
+  const [selectedTerms, setSelectedTerms] = useState([]);
 
   // Bank Info
   const [bankName, setBankName] = useState("Federal Bank, Pune - Phursungi");
@@ -275,6 +277,9 @@ export default function AddAdvancePaymentReceiptModal({
       setPurpose(receiptData.purpose || "");
       setNotes(receiptData.notes || "");
       if (receiptData.terms_conditions) setTermsConditions(receiptData.terms_conditions);
+      setSelectedTerms(
+        Array.isArray(receiptData.terms_and_conditions) ? receiptData.terms_and_conditions : []
+      );
 
       setBankName(receiptData.bank_name || "");
       setBankAccountNo(receiptData.bank_account_no || "");
@@ -513,9 +518,10 @@ export default function AddAdvancePaymentReceiptModal({
       billing_detail: selectedBillingDetailId ? parseInt(selectedBillingDetailId) : null,
 
       company_name: "D S AQUA",
-      company_address: "HEAD OFFICE: Nr Kalyani School, Belhekar Wasti, Manjari, Hadapsar, Pune Maharashtra",
-      company_phone: "8830373068",
-      company_email: "dswastewatersolution@gmail.com",
+      company_address:
+        "Manufacturing Plant: S No 156/5A, Belhekar Wasti, Manjari Bk, Hadapsar, Pune City, Maharashtra, India – 412307.\nCorporate Office: Office No. 216, 2nd Floor, Deccan Heights, Opp. KFC, Near PMT Bus Stop, Deccan, Above Joshi Wadewale, Pune – 411004.",
+      company_phone: "+91 866-8274-241, +91 883-0373-068",
+      company_email: "dswatertech1@gmail.com",
       company_gstin: "27AALCD8065C1ZJ",
       company_state: "27-Maharashtra",
 
@@ -544,7 +550,13 @@ export default function AddAdvancePaymentReceiptModal({
       balance_amount: parseFloat(balanceAmount) || 0,
       purpose: purpose.trim(),
       notes: notes.trim(),
-      terms_conditions: termsConditions,
+      terms_conditions:
+        selectedTerms.length > 0
+          ? selectedTerms.map((t) => `${t.name}: ${t.description}`).join("\n")
+          : isEdit
+          ? termsConditions
+          : "",
+      terms_and_conditions: selectedTerms,
     };
 
     try {
@@ -1121,12 +1133,12 @@ export default function AddAdvancePaymentReceiptModal({
             </div>
           </div>
 
-          {/* SECTION 5: NOTES & TERMS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* SECTION 5: NOTES & QUOTATION TERMS */}
+          <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Internal Notes / Remarks</label>
               <textarea
-                rows={3}
+                rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Any special remarks or receipt instructions..."
@@ -1134,15 +1146,12 @@ export default function AddAdvancePaymentReceiptModal({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Terms &amp; Conditions</label>
-              <textarea
-                rows={3}
-                value={termsConditions}
-                onChange={(e) => setTermsConditions(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-500 bg-white resize-none text-slate-600"
-              />
-            </div>
+            <QuotationTermsSelector
+              selectedTerms={selectedTerms}
+              onChange={setSelectedTerms}
+              isEdit={isEdit}
+              legacyTermsText={termsConditions}
+            />
           </div>
         </form>
 

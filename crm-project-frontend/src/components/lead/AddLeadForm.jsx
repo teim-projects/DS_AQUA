@@ -17,7 +17,7 @@ export default function AddLeadForm({
   const API_URL = `${baseApi.replace(/\/$/, "")}/lead/lead/`;
   const PRODUCT_API_URL = `${baseApi.replace(/\/$/, "")}/product/products/`;
   const CUSTOMER_API_URL = `${baseApi.replace(/\/$/, "")}/lead/customer/?limit=1000`;
-  const STAFF_API_URL = `${baseApi.replace(/\/$/, "")}/auth/staff/all/`;
+  const STAFF_API_URL = `${baseApi.replace(/\/$/, "")}/auth/staff/all/?exclude_role=technician`;
   const { userRole, userInfo } = useUserRole(baseApi);
   const isAdmin = userInfo?.is_superuser || ["admin", "sub-admin", "subadmin"].includes(userInfo?.role?.name?.toLowerCase());
   const [step, setStep] = useState(1);
@@ -203,8 +203,12 @@ export default function AddLeadForm({
       })
       .then((data) => {
         const items = Array.isArray(data) ? data : data.results ?? [];
+        const nonTechnicians = items.filter((u) => {
+          const rName = (u?.role?.name || u?.role_name || (typeof u?.role === "string" ? u.role : "")).trim().toLowerCase();
+          return !rName.includes("technician");
+        });
         setStaffOptions(
-          items.map((u) => ({
+          nonTechnicians.map((u) => ({
             id: u.id,
             name: `${u.first_name} ${u.last_name}`.trim() || u.email || u.mobile_no,
             email: u.email,
@@ -444,7 +448,7 @@ export default function AddLeadForm({
       return false;
     }
     if (!formData.company_name.trim()) {
-      showError("company_name", "Company Name is required");
+      showError("company_name", "Company / Client Name is required");
       return false;
     }
     if (!formData.mobile_number.trim()) {
@@ -485,7 +489,7 @@ export default function AddLeadForm({
 
   const validateStep1 = () => {
     if (!formData.company_name.trim()) {
-      showError("company_name", "Company Name is required");
+      showError("company_name", "Company / Client Name is required");
       return false;
     }
     if (!formData.mobile_number.trim()) {
@@ -805,12 +809,12 @@ export default function AddLeadForm({
 
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-slate-600">
-                      Company Name *
+                      Company / Client Name *
                     </label>
                     <input
                       name="company_name"
                       type="text"
-                      placeholder="e.g. Infosys Ltd"
+                      placeholder="Company / Client name"
                       value={formData.company_name}
                       onChange={(e) => {
                         clearError(e);

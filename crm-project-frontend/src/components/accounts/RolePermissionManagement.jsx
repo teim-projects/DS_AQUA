@@ -65,6 +65,11 @@ export const SYSTEM_MODULES = [
     name: "Billing & Bank Master",
     description: "Manage bank accounts, IFSC, UPI IDs, and QR code details",
   },
+  {
+    key: "audit",
+    name: "Audit / Deleted Data",
+    description: "View deleted records, restore deleted data, and configure retention days",
+  },
 ];
 
 // Helper to get default permissions for a role name
@@ -85,7 +90,7 @@ const getDefaultPermissionsForRole = (roleName = "") => {
         delete: false,
       };
     } else {
-      const isSystemAdminMod = mod.key === "accounts" || mod.key === "roles";
+      const isSystemAdminMod = mod.key === "accounts" || mod.key === "roles" || mod.key === "audit";
       permissions[mod.key] = {
         view: !isSystemAdminMod,
         create: false,
